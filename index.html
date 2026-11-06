@@ -3,78 +3,59 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>联机排错</title>
-<!-- 换成了国内更容易连上的 CDN 库 -->
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<title>排错测试</title>
+<!-- 换用 jsdelivr 的 CDN 库 -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body style="background:#070a12; color:#fff; padding:20px; font-family:sans-serif;">
-
-  <!-- 一旦程序报错，立刻弹窗告诉你 -->
   <script>
+    // 抓住任何报错
     window.onerror = function(msg, url, line) {
       alert("程序崩溃啦！\n原因: " + msg + "\n行号: " + line);
       return false;
     };
   </script>
-
-  <h2>排错测试大厅</h2>
-  <input type="text" id="playerName" value="测试玩家" style="padding:10px; font-size:16px;"><br><br>
   
-  <!-- 点击按钮后，按钮文字会立刻改变 -->
+  <h2>排错测试大厅</h2>
   <button id="btn" onclick="testCreate()" style="padding:15px 30px; font-size:18px; background:#4d7cfe; color:white; border:none; border-radius:8px;">
     点击测试创建房间
   </button>
-
   <p id="status" style="color:#ffb454;"></p>
-
+  
   <script>
-    const SUPABASE_URL = 'https://louffiaacjcwxknzpign.supabase.co'; 
-    const SUPABASE_KEY = 'sb_publishable_s0_DdhJkssY-wwRzWUyZCA_QG8onczZ';
-    
-    let supabase;
-
-    // 检查库是否成功加载
-    if (typeof supabase === 'undefined') {
-      alert("严重错误：Supabase 代码库加载失败！你的网络可能被墙了，请挂梯子。");
-    } else {
-      try {
-        // 注意这里修复了之前代码里有可能引起重名报错的写法
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        document.getElementById('status').innerText = "数据库客户端初始化成功，可以点击按钮了。";
-      } catch(e) {
-        alert("初始化失败: " + e.message);
-      }
-    }
-
+    // 用了最安全的写法，确保按钮一定点得动
     async function testCreate() {
       const btn = document.getElementById('btn');
       const status = document.getElementById('status');
-      
-      // 1. 立刻改变按钮文字，证明代码执行了
       btn.innerText = "正在连接...";
       btn.disabled = true;
       status.innerText = "正在请求数据库，请稍候...";
 
       try {
+        // 检查库有没有加载出来
+        if (typeof window.supabase === 'undefined') {
+          throw new Error("Supabase 代码库没加载出来！请检查你的 VPN 是否开启了全局模式。");
+        }
+
+        // 初始化
+        const client = window.supabase.createClient('https://louffiaacjcwxknzpign.supabase.co', 'sb_publishable_s0_DdhJkssY-wwRzWUyZCA_QG8onczZ');
+        
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         
-        // 2. 尝试插入数据
-        const { data, error } = await supabase.from('rooms').insert({
+        // 尝试插入数据
+        const { data, error } = await client.from('rooms').insert({
           room_id: code,
           public_state: { status: 'waiting' },
           private_p1: { test: true }
         });
 
-        // 3. 处理结果
-        if (error) {
-          throw new Error(error.message);
-        }
+        if (error) throw new Error(error.message);
 
         alert("大成功！房间已创建，房间码：" + code + "\n说明你的网络和数据库都没问题！");
         status.innerText = "成功！";
         
       } catch (err) {
-        alert("创建失败！报错信息：\n" + err.message);
+        alert("测试失败！原因：\n" + err.message);
         status.innerText = "失败了，看弹窗。";
       } finally {
         btn.innerText = "重新测试";
