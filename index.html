@@ -4,417 +4,124 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>节奏对决 · 联机战棋版</title>
+<!-- 引入 Supabase 库 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-  :root{ --bg:#070a12; --panel:rgba(20,28,48,.85); --border:rgba(90,130,220,.22); --accent:#4d7cfe; --danger:#ff5a6e; --ok:#35d6a4; --warn:#ffb454; --text:#e8eeff; --muted:#8a97b8; }
-  *{box-sizing:border-box;} [hidden]{display:none !important;}
-  body{ margin:0; min-height:100vh; font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; background:radial-gradient(1100px 700px at 12% -12%, #1d2d55 0%, transparent 60%), radial-gradient(900px 600px at 92% 108%, #2a1d45 0%, transparent 60%), #070a12; color:var(--text); display:flex; justify-content:center; padding:10px; overflow: hidden; }
-  .game{ width:100%; max-width:1400px; display:flex; flex-direction:column; gap:10px;}
-  .game-header{ display:flex; align-items:center; gap:14px; padding:10px 18px; background:var(--panel); border:1px solid var(--border); border-radius:16px;}
-  .game-header h1{font-size:18px; margin:0; color:#9fc4ff; letter-spacing:2px;}
-  .round-badge{font-size:13px; color:var(--muted); padding:5px 12px; border-radius:999px; border:1px solid var(--border); background:rgba(255,255,255,.03);}
-  .round-badge span{color:#9fc4ff; font-weight:700;}
-  .hdr-spacer{flex:1;}
-  .hdr-btn{font-family:inherit; font-size:13px; padding:6px 12px; border-radius:8px; border:1px solid var(--border); background:rgba(255,255,255,.04); color:var(--text); cursor:pointer;}
-  .hdr-btn:hover{background:rgba(120,160,255,.16); border-color:var(--accent);}
-  .main-layout{ display:grid; grid-template-columns: 250px 1fr 250px; gap:12px; align-items:start;}
-  .player-panel{ background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:12px; display:flex; flex-direction:column; gap:12px;}
-  .player-panel.is-active{ border-color:var(--accent); box-shadow:0 0 0 1px rgba(77,124,254,.5), 0 0 20px rgba(77,124,254,.2);}
-  .pp-head{display:flex; align-items:center; gap:8px; font-weight:800; font-size:15px;}
-  .first-tag{font-size:10px; padding:2px 8px; border-radius:999px; background:linear-gradient(90deg,#ffb454,#ff7a9c); color:#20130a; display:none;}
-  .is-first .first-tag{display:inline-block;}
-  .dice-pool{ display:flex; flex-wrap:wrap; gap:4px; padding:8px; background:rgba(255,255,255,.03); border-radius:10px; border:1px solid rgba(255,255,255,.05); min-height:44px;}
-  .die{ width:28px; height:28px; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:1px; padding:3px; border-radius:6px; background:linear-gradient(160deg,#eef3ff,#b9c7e8); transition:.2s; cursor:pointer; box-shadow:inset 0 -1px 0 rgba(0,0,0,.18);}
-  .die .dot{background:#16203a; border-radius:50%; width:70%; height:70%; align-self:center; justify-self:center;}
-  .die.selected{outline:2px solid #ffd76a; box-shadow:0 0 8px rgba(255,215,106,.8); transform:translateY(-2px);}
-  .die.hidden-die{background:linear-gradient(160deg,#2a3a5c,#152038); cursor:default; display:flex; align-items:center; justify-content:center;}
-  .die.hidden-die::after{content:'?'; color:rgba(255,255,255,.2); font-size:14px;}
-  .chars-list{display:flex; flex-direction:column; gap:8px;}
-  .char-card{ display:flex; gap:10px; align-items:center; padding:8px; border-radius:10px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); cursor:pointer;}
-  .char-card.selected{border-color:#ffd76a; background:rgba(255,215,106,.1);}
-  .char-card.dead{opacity:.3; pointer-events:none; filter:grayscale(1);}
-  .char-avatar{ width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; color:#fff;}
-  .p1-avatar{background:linear-gradient(135deg,#4d7cfe,#9b6dff);}
-  .p2-avatar{background:linear-gradient(135deg,#ff5a6e,#ff7a9c);}
-  .char-info{flex:1; display:flex; flex-direction:column; gap:2px;}
-  .char-name{font-size:13px; font-weight:700;}
-  .char-hp-bar{height:6px; background:rgba(255,255,255,.1); border-radius:3px; overflow:hidden;}
-  .char-hp-fill{height:100%; background:#35d6a4;}
-  .char-hp-text{font-size:10px; color:var(--muted); text-align:right;}
-  .center-panel{ grid-column: 2 / 3; display:flex; flex-direction:column; gap:10px; background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:12px;}
-  .map-container{ position:relative; width:100%; aspect-ratio: 4/5; max-height:65vh; background:var(--panel); border:1px solid var(--border); border-radius:16px; overflow:hidden; touch-action: none; margin:0 auto;}
-  svg.map-lines{position:absolute; inset:0; width:100%; height:100%; pointer-events:none;}
-  .map-node{ position:absolute; width:32px; height:32px; transform:translate(-50%,-50%); border-radius:50%; background:rgba(255,255,255,.05); border:2px solid rgba(255,255,255,.3); z-index:5; display:flex; justify-content:center; align-items:center; font-size:11px; font-weight:bold;}
-  .map-node.highlight{ background:rgba(77,124,254,.4); border-color:#4d7cfe; box-shadow:0 0 15px rgba(77,124,254,.9); cursor:pointer;}
-  .map-node.targetable{ background:rgba(255,90,110,.4); border-color:#ff5a6e; box-shadow:0 0 15px rgba(255,90,110,.9); cursor:pointer;}
-  .map-node.targetable.ally{ background:rgba(53,214,164,.4); border-color:#35d6a4;}
-  .map-char{ position:absolute; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; color:#fff; z-index:10; box-shadow:0 4px 8px rgba(0,0,0,.6); border:2px solid #fff; pointer-events:none; transition: all 0.3s;}
-  .map-char.p1{background:linear-gradient(135deg,#4d7cfe,#9b6dff);}
-  .map-char.p2{background:linear-gradient(135deg,#ff5a6e,#ff7a9c);}
-  .map-char::after{ content: attr(data-hp); position:absolute; top:-16px; background:rgba(0,0,0,.85); font-size:10px; padding:1px 5px; border-radius:4px; white-space:nowrap;}
-  .map-warn{ position:absolute; font-size:22px; z-index:20; pointer-events:none; animation: pulse-warn 0.8s infinite alternate; transform:translate(-50%,-50%);}
-  @keyframes pulse-warn { from { opacity: 0.8; transform: translate(-50%,-50%) scale(0.9); } to { opacity: 1; transform: translate(-50%,-50%) scale(1.3); } }
-  .turn-banner{ font-size:14px; padding:10px 14px; border-radius:10px; background:linear-gradient(90deg,rgba(77,124,254,.2),rgba(155,109,255,.1)); border:1px solid rgba(120,160,255,.3);}
-  .turn-banner b{color:#9fc4ff;}
-  .action-btns{display:flex; flex-wrap:wrap; gap:8px;}
-  .act-btn{ flex:1; min-width:80px; font-family:inherit; font-size:13px; font-weight:700; padding:10px; border-radius:10px; cursor:pointer; border:1px solid; transition:.2s;}
-  .act-btn.move{background:rgba(77,124,254,.15); border-color:#4d7cfe; color:#cfe0ff;}
-  .act-btn.skill{background:rgba(255,90,110,.15); border-color:#ff5a6e; color:#ff9aa7;}
-  .act-btn.end{background:rgba(53,214,164,.15); border-color:#35d6a4; color:#a9f5da;}
-  .act-btn.skip{background:rgba(255,180,84,.15); border-color:#ffb454; color:#ffd9a0;}
-  .act-btn.cancel{background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.2); color:#ddd;}
-  .hint-text{font-size:12px; color:#b9c8ea; padding:8px; background:rgba(0,0,0,.2); border-radius:8px;}
-  .hint-text.warn{color:#ffb454;} .hint-text.ok{color:#35d6a4;}
-  .log-panel{ background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:10px 14px; grid-column: 1 / -1;}
-  .log-title{font-size:11px; letter-spacing:2px; color:var(--muted); margin-bottom:6px;}
-  .log-list{ height:80px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; font-size:12px;}
-  .log-item{color:#9aa8c8;} .log-item.attack{color:#ff8b9a;} .log-item.sys{color:#7d8aa8; font-style:italic;}
-  .modal-mask{ position:fixed; inset:0; background:rgba(4,6,14,.95); display:flex; align-items:center; justify-content:center; z-index:100;}
-  .modal-card{ background:linear-gradient(160deg,#18213c,#0e1424); border:1px solid rgba(120,160,255,.4); border-radius:20px; padding:30px; text-align:center; width:90%; max-width:400px; display:flex; flex-direction:column; gap:15px;}
-  .modal-card h2{margin:0; color:#ffd76a; font-size:22px;}
-  .modal-card input{ font-family:inherit; font-size:16px; text-align:center; padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,.2); background:rgba(0,0,0,.3); color:#fff;}
-  .modal-btn{ font-family:inherit; font-size:15px; font-weight:bold; padding:12px; border-radius:10px; border:none; cursor:pointer; background:linear-gradient(90deg,#7fa6ff,#b48cff); color:#0a1020;}
-  @media (max-width: 1024px){ .main-layout{grid-template-columns: 1fr; } .center-panel{grid-column: 1;} }
-</style>
 </head>
-<body>
+<body style="background:#070a12; color:#fff; padding:10px; font-family:sans-serif;">
 
-<div class="modal-mask" id="lobbyScreen">
-  <div class="modal-card" id="lobbyCard">
-    <h2>节奏对决 · 联机版</h2>
-    <p style="color:#8a97b8; font-size:13px; margin:0;">输入昵称，创建或加入房间</p>
-    <input type="text" id="playerName" placeholder="你的昵称" maxlength="8" value="玩家">
-    <button class="modal-btn" id="btnCreate" onclick="createRoom()">创建新房间</button>
-    <div style="display:flex; align-items:center; gap:10px; color:#8a97b8; font-size:12px;">
-      <hr style="flex:1; border-color:rgba(255,255,255,.1);"> 或者 <hr style="flex:1; border-color:rgba(255,255,255,.1);">
-    </div>
-    <input type="text" id="joinRoomCode" placeholder="输入 6 位房间码" maxlength="6">
-    <button class="modal-btn" id="btnJoin" style="background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.2);" onclick="joinRoom()">加入房间</button>
+  <!-- 这个脚本用来抓取任何报错并弹窗 -->
+  <script>
+    window.onerror = function(msg, url, line) {
+      alert("游戏代码报错啦！\n原因: " + msg + "\n行号: " + line);
+      return false;
+    };
+  </script>
+
+  <!-- 大厅界面 -->
+  <div id="lobbyScreen" style="max-width:400px; margin:100px auto; text-align:center; background:#18213c; padding:30px; border-radius:20px; border:1px solid #4d7cfe;">
+    <h2 style="color:#ffd76a; margin-top:0;">节奏对决 · 联机版</h2>
+    <p style="color:#8a97b8; font-size:13px;">输入昵称，创建或加入房间</p>
+    <input type="text" id="playerName" placeholder="你的昵称" value="玩家" style="padding:10px; border-radius:8px; border:none; width:80%; margin-bottom:15px; text-align:center;">
+    <button id="btnCreate" onclick="createRoom()" style="width:100%; padding:12px; background:#4d7cfe; color:white; border:none; border-radius:8px; font-weight:bold; margin-bottom:10px;">创建新房间</button>
+    
+    <div style="margin:15px 0; color:#8a97b8; font-size:12px;">— 或者 —</div>
+    
+    <input type="text" id="joinRoomCode" placeholder="输入 6 位房间码" maxlength="6" style="padding:10px; border-radius:8px; border:none; width:80%; margin-bottom:15px; text-align:center;">
+    <button id="btnJoin" onclick="joinRoom()" style="width:100%; padding:12px; background:#35d6a4; color:#000; border:none; border-radius:8px; font-weight:bold;">加入房间</button>
   </div>
 
-  <div class="modal-card" id="waitScreen" hidden>
-    <h2>等待对手加入...</h2>
-    <p style="color:#8a97b8; font-size:13px; margin:0;">把房间码发给你的朋友：</p>
-    <div style="font-size:36px; font-weight:900; letter-spacing:5px; color:#35d6a4;" id="displayRoomCode">------</div>
+  <!-- 等待对手界面 -->
+  <div id="waitScreen" style="display:none; max-width:400px; margin:100px auto; text-align:center; background:#18213c; padding:30px; border-radius:20px;">
+    <h2 style="color:#35d6a4;">等待对手加入...</h2>
+    <p style="color:#8a97b8;">把房间码发给你的朋友：</p>
+    <div id="displayRoomCode" style="font-size:40px; font-weight:bold; color:#ffd76a; letter-spacing:5px; margin:20px 0;">------</div>
   </div>
-</div>
 
-<div class="game" id="gameScreen" hidden>
-  <header class="game-header">
-    <h1>节奏对决</h1>
-    <div class="round-badge">第 <span id="roundNum">1</span> 回合</div>
-    <div class="round-badge" style="background:rgba(53,214,164,.1); border-color:#35d6a4; color:#35d6a4;">房间: <span id="myRoomCode"></span></div>
-    <div class="hdr-spacer"></div>
-    <button class="hdr-btn" onclick="location.reload()">退出房间</button>
-  </header>
+  <!-- 游戏主界面 (先隐藏) -->
+  <div id="gameScreen" style="display:none;">
+    <h2>游戏已开始！(排版极简版测试)</h2>
+    <p>如果看到这里，说明联机彻底成功了！你的完整战棋界面代码在我下一版给你，现在我们先把网络跑通。</p>
+    <button onclick="location.reload()">退出</button>
+  </div>
 
-  <main class="main-layout">
-    <section class="player-panel" id="panel0">
-      <div class="pp-head"><span class="pname" id="name0">玩家 1</span></div>
-      <div class="dice-pool" id="dice0"></div>
-      <div class="chars-list" id="chars0"></div>
-    </section>
+  <script>
+    const SUPABASE_URL = 'https://louffiaacjcwxknzpign.supabase.co'; 
+    const SUPABASE_KEY = 'sb_publishable_s0_DdhJkssY-wwRzWUyZCA_QG8onczZ';
 
-    <section class="center-panel">
-      <div class="map-container" id="mapContainer"><svg class="map-lines" id="mapSvg"></svg></div>
-      <div class="turn-banner" id="turnBanner">准备开始</div>
-      <div class="action-btns" id="actionBtns"></div>
-      <div class="hint-text" id="hintText" hidden></div>
-    </section>
+    // 检查库有没有加载成功
+    if (typeof window.supabase === 'undefined') {
+      alert("严重错误：Supabase 库没有加载出来！请切换你的 VPN 节点。");
+    }
 
-    <section class="player-panel" id="panel1">
-      <div class="pp-head"><span class="pname" id="name1">玩家 2</span></div>
-      <div class="dice-pool" id="dice1"></div>
-      <div class="chars-list" id="chars1"></div>
-    </section>
+    // 用 client 变量名，避免和 window.supabase 冲突
+    let client;
+    try {
+      client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    } catch(e) {
+      alert("初始化失败: " + e.message);
+    }
 
-    <footer class="log-panel">
-      <div class="log-title">战 斗 日 志</div>
-      <div class="log-list" id="logList"></div>
-    </footer>
-  </main>
-</div>
+    let myRole = null, myRoomId = null;
 
-<script>
-const SUPABASE_URL = 'https://louffiaacjcwxknzpign.supabase.co'; 
-const SUPABASE_KEY = 'sb_publishable_s0_DdhJkssY-wwRzWUyZCA_QG8onczZ';
-let supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-let myRole = null, myRoomId = null, myLocalName = '玩家', roomChannel = null, currentGameState = null; 
-
-const DEFAULT_MAP_DATA = {
-  "nodes":[{"id":"0","x":10,"y":10},{"id":"1","x":10,"y":20},{"id":"2","x":9.37,"y":30.96},{"id":"3","x":9.47,"y":42.35},{"id":"4","x":17.75,"y":49.91},{"id":"5","x":10,"y":57.55},{"id":"6","x":9.89,"y":69.3},{"id":"7","x":9.26,"y":79.6},{"id":"8","x":10,"y":90},{"id":"9","x":21.11,"y":89.95},{"id":"10","x":32.54,"y":90.17},{"id":"11","x":43.45,"y":90.17},{"id":"12","x":55.19,"y":89.91},{"id":"13","x":66.72,"y":89.82},{"id":"15","x":67.22,"y":79.82},{"id":"16","x":67.38,"y":69.47},{"id":"17","x":67.17,"y":59.47},{"id":"19","x":68.17,"y":32.28},{"id":"20","x":67.8,"y":23.27},{"id":"21","x":67.69,"y":13.97},{"id":"23","x":48.35,"y":9.73},{"id":"24","x":38.02,"y":13.57},{"id":"25","x":28.62,"y":19.08},{"id":"26","x":20.49,"y":26.54},{"id":"31","x":30.27,"y":49.89},{"id":"32","x":42.18,"y":49.73},{"id":"33","x":54.92,"y":49.91},{"id":"34","x":67.54,"y":50.17},{"id":"35","x":79.81,"y":50.26},{"id":"100","x":77.79,"y":89.64},{"id":"101","x":68.37,"y":41.45},{"id":"102","x":92.19,"y":50.05},{"id":"103","x":59.3,"y":7.4},{"id":"104","x":54.73,"y":69.8},{"id":"105","x":35.24,"y":81.5},{"id":"106","x":42.99,"y":74.26},{"id":"108","x":89.06,"y":89.51}],
-  "edges":[["0","1"],["1","2"],["2","3"],["3","4"],["4","5"],["5","6"],["6","7"],["7","8"],["8","9"],["9","10"],["10","11"],["11","12"],["12","13"],["15","16"],["16","17"],["19","20"],["20","21"],["23","24"],["24","25"],["25","26"],["4","31"],["31","32"],["32","33"],["33","34"],["34","35"],["26","2"],["23","103"],["103","21"],["19","101"],["101","34"],["34","17"],["35","102"],["16","104"],["104","106"],["106","105"],["105","10"],["15","13"],["15","12"],["13","100"],["100","108"],["3","5"]],
-  "spawns": { "p1": ["0", "4", "8"], "p2": ["21", "102", "108"] }
-};
-
-const SKILLS = {
-  warrior1: { name: '猛击', icon: '⚔️', type: 'attack', range: 1, target: 'enemy', diceCount: 1, costDesc: '任意 1 骰', validate: v => v.length === 1, effect: { dmg: 8 } },
-  warrior2: { name: '重斩', icon: '💥', type: 'attack', range: 1, target: 'enemy', diceCount: 2, costDesc: '2 骰，和 ≥ 9', validate: v => v.length === 2 && v[0]+v[1] >= 9, effect: { dmg: 20 } },
-  mage1:    { name: '火球', icon: '🔥', type: 'attack', range: 3, target: 'enemy', diceCount: 1, costDesc: '1 骰，点 ≥ 3', validate: v => v.length === 1 && v[0] >= 3, effect: { dmg: 10 } },
-  mage2:    { name: '陨石', icon: '☄️', type: 'attack', range: 4, target: 'enemy', diceCount: 2, costDesc: '2 骰，和 ≥ 8', validate: v => v.length === 2 && v[0]+v[1] >= 8, effect: { dmg: 22 } },
-  archer1:  { name: '射击', icon: '🏹', type: 'attack', range: 2, target: 'enemy', diceCount: 1, costDesc: '任意 1 骰', validate: v => v.length === 1, effect: { dmg: 7 } },
-  archer2:  { name: '穿透箭', icon: '🎯', type: 'attack', range: 3, target: 'enemy', diceCount: 2, costDesc: '2 骰，和 ≥ 7', validate: v => v.length === 2 && v[0]+v[1] >= 7, effect: { dmg: 16 } }
-};
-
-const CHAR_TEMPLATES = {
-  warrior: { name: '战士', icon: '🛡️', maxHp: 35, skills: ['warrior1', 'warrior2'] },
-  mage:    { name: '法师', icon: '🔮', maxHp: 20, skills: ['mage1', 'mage2'] },
-  archer:  { name: '射手', icon: '🏹', maxHp: 24, skills: ['archer1', 'archer2'] }
-};
-
-async function createRoom() {
-  const btn = document.getElementById('btnCreate'); btn.textContent = '正在连接...'; btn.disabled = true;
-  try {
-    const name = document.getElementById('playerName').value.trim() || '玩家';
-    myLocalName = name;
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    myRole = 'p1'; myRoomId = code;
-
-    const initialPublic = { status: 'waiting', turn: 1, first_player: 'p1', active_player: 'p1', p1: { name: myLocalName, hp: 60, dice_count: 8, chars: initChars('p1') }, p2: { name: '等待加入...', hp: 60, dice_count: 8, chars: [] }, logs: [{ text: '等待玩家 2 加入...', type: 'sys' }] };
-    const initialPrivateP1 = { dice_points: Array.from({length:8},()=>Math.floor(Math.random()*6)+1) };
-
-    const { error } = await supabase.from('rooms').insert({ room_id: code, public_state: initialPublic, private_p1: initialPrivateP1 });
-    if (error) throw new Error(error.message);
-
-    document.getElementById('lobbyCard').hidden = true;
-    document.getElementById('waitScreen').hidden = false;
-    document.getElementById('displayRoomCode').textContent = code;
-    listenToRoom();
-  } catch (err) { alert('创建失败:\n' + err.message); btn.textContent = '创建新房间'; btn.disabled = false; }
-}
-
-async function joinRoom() {
-  const btn = document.getElementById('btnJoin'); btn.textContent = '正在连接...'; btn.disabled = true;
-  try {
-    const name = document.getElementById('playerName').value.trim() || '玩家';
-    const code = document.getElementById('joinRoomCode').value.trim();
-    if (code.length !== 6) throw new Error('请输入正确的 6 位房间码');
-    myLocalName = name; myRole = 'p2'; myRoomId = code;
-
-    const { data, error } = await supabase.from('rooms').select('*').eq('room_id', code).single();
-    if (error) throw new Error('查询不到该房间，或网络错误');
-    if (data.public_state.status !== 'waiting') throw new Error('房间已满或游戏已开始！');
-
-    const newPublic = data.public_state;
-    newPublic.status = 'playing'; newPublic.p2.name = myLocalName; newPublic.p2.chars = initChars('p2');
-    newPublic.logs.push({ text: `${myLocalName} 加入了房间！`, type: 'sys' });
-    const initialPrivateP2 = { dice_points: Array.from({length:8},()=>Math.floor(Math.random()*6)+1) };
-
-    const { error: upErr } = await supabase.from('rooms').update({ public_state: newPublic, private_p2: initialPrivateP2 }).eq('room_id', code);
-    if (upErr) throw new Error('加入房间更新数据失败');
-
-    document.getElementById('lobbyScreen').hidden = true;
-    document.getElementById('gameScreen').hidden = false;
-    document.getElementById('myRoomCode').textContent = code;
-    listenToRoom();
-  } catch (err) { alert('加入失败:\n' + err.message); btn.textContent = '加入房间'; btn.disabled = false; }
-}
-
-function initChars(role) {
-  const spawns = DEFAULT_MAP_DATA.spawns[role]; const pool = ['warrior', 'mage', 'archer'];
-  return pool.map((type, i) => { const t = CHAR_TEMPLATES[type]; return { idx: i, type, name: t.name, icon: t.icon, hp: t.maxHp, maxHp: t.maxHp, shield: 0, skills: t.skills, pos: spawns[i] }; });
-}
-
-function listenToRoom() {
-  roomChannel = supabase.channel('room_' + myRoomId)
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `room_id=eq.${myRoomId}` }, payload => {
-      const dbData = payload.new;
-      if (dbData.public_state.status === 'waiting' && myRole === 'p1') return;
-      if (dbData.public_state.status === 'playing') { document.getElementById('lobbyScreen').hidden = true; document.getElementById('gameScreen').hidden = false; document.getElementById('myRoomCode').textContent = myRoomId; }
-      currentGameState = dbData;
-      const pub = dbData.public_state; const myPrivate = dbData[myRole === 'p1' ? 'private_p1' : 'private_p2'];
+    async function createRoom() {
+      const btn = document.getElementById('btnCreate');
+      btn.textContent = '正在连接...';
       
-      if (pub.status === 'playing' && pub.active_player === myRole && (!myPrivate || !myPrivate.dice_points || myPrivate.dice_points.length !== 8)) {
-        const newPoints = Array.from({length:8},()=>Math.floor(Math.random()*6)+1);
-        const updateData = {}; updateData[myRole === 'p1' ? 'private_p1' : 'private_p2'] = { dice_points: newPoints };
-        updateData.public_state = JSON.parse(JSON.stringify(pub)); updateData.public_state[myRole].dice_count = 8;
-        updateData.public_state.logs.push({ text: `${pub[myRole].name} 重摇了 8 个骰子`, type: 'sys' });
-        supabase.from('rooms').update(updateData).eq('room_id', myRoomId); return; 
-      }
-      renderFromCloud();
-    }).subscribe();
-}
+      try {
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        myRoomId = code;
+        myRole = 'p1';
 
-function renderFromCloud() {
-  if (!currentGameState) return; const pub = currentGameState.public_state;
-  document.getElementById('roundNum').textContent = pub.turn;
-  document.getElementById('name0').textContent = pub.p1.name + (myRole === 'p1' ? ' (你)' : '');
-  document.getElementById('name1').textContent = pub.p2.name + (myRole === 'p2' ? ' (你)' : '');
-  document.getElementById('panel0').classList.toggle('is-active', pub.active_player === 'p1');
-  document.getElementById('panel1').classList.toggle('is-active', pub.active_player === 'p2');
-  renderDiceUI(0, pub.p1.dice_count, currentGameState.private_p1, myRole === 'p1');
-  renderDiceUI(1, pub.p2.dice_count, currentGameState.private_p2, myRole === 'p2');
-  renderCharsUI(0, pub.p1.chars); renderCharsUI(1, pub.p2.chars);
-  renderMapUI(pub); renderControlsUI(pub);
-}
-
-function renderDiceUI(playerIdx, count, privateData, isMe) {
-  const pool = document.getElementById(`dice${playerIdx}`); pool.innerHTML = '';
-  if (isMe && privateData && privateData.dice_points) {
-    privateData.dice_points.forEach((val, idx) => {
-      const el = document.createElement('div'); el.className = 'die'; el.dataset.idx = idx;
-      const dots = {1:[[2,2]],2:[[1,1],[3,3]],3:[[1,1],[2,2],[3,3]],4:[[1,1],[1,3],[3,1],[3,3]],5:[[1,1],[1,3],[2,2],[3,1],[3,3]],6:[[1,1],[1,3],[2,1],[2,3],[3,1],[3,3]]};
-      (dots[val]||[]).forEach(([r,c]) => { const dot = document.createElement('span'); dot.className = 'dot'; dot.style.gridRow = r; dot.style.gridColumn = c; el.appendChild(dot); });
-      el.onclick = () => handleDieClickUI(playerIdx, idx, val);
-      if (window.localUIState && window.localUIState.phase === 'select_dice' && window.localUIState.selectedDice.has(idx)) el.classList.add('selected');
-      pool.appendChild(el);
-    });
-  } else { for (let i = 0; i < count; i++) { const el = document.createElement('div'); el.className = 'die hidden-die'; pool.appendChild(el); } }
-}
-
-function renderCharsUI(playerIdx, chars) {
-  const list = document.getElementById(`chars${playerIdx}`); list.innerHTML = ''; if (!chars) return;
-  chars.forEach(c => {
-    const el = document.createElement('div');
-    const canClick = currentGameState.public_state.status === 'playing' && currentGameState.public_state.active_player === myRole && c.hp > 0 && playerIdx === (myRole === 'p1' ? 0 : 1);
-    el.className = 'char-card' + (c.hp <= 0 ? ' dead' : '');
-    if (window.localUIState && window.localUIState.pendingChar && window.localUIState.pendingChar.pIdx === playerIdx && window.localUIState.pendingChar.cIdx === c.idx) el.classList.add('selected');
-    const avatar = document.createElement('div'); avatar.className = `char-avatar p${playerIdx+1}-avatar`; avatar.textContent = c.icon;
-    const info = document.createElement('div'); info.className = 'char-info';
-    const hpPct = Math.max(0, c.hp / c.maxHp * 100);
-    info.innerHTML = `<div class="char-name">${c.name}</div><div class="char-hp-bar"><div class="char-hp-fill ${hpPct<=30?'low':''}" style="width:${hpPct}%"></div></div><div class="char-hp-text">${c.hp} / ${c.maxHp}</div>`;
-    if (canClick) el.onclick = () => selectCharUI(playerIdx, c.idx);
-    el.appendChild(avatar); el.appendChild(info); list.appendChild(el);
-  });
-}
-
-function renderMapUI(pub) {
-  const svg = document.getElementById('mapSvg'); const container = document.getElementById('mapContainer');
-  svg.innerHTML = ''; svg.setAttribute('viewBox', '0 0 100 100');
-  DEFAULT_MAP_DATA.edges.forEach(([a, b]) => {
-    const n1 = DEFAULT_MAP_DATA.nodes.find(n => n.id === a); const n2 = DEFAULT_MAP_DATA.nodes.find(n => n.id === b);
-    if (!n1 || !n2) return; const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', n1.x); line.setAttribute('y1', n1.y); line.setAttribute('x2', n2.x); line.setAttribute('y2', n2.y);
-    line.setAttribute('stroke', 'rgba(255,255,255,.15)'); line.setAttribute('stroke-width', '1'); svg.appendChild(line);
-  });
-  Array.from(container.querySelectorAll('.map-node, .map-char, .map-warn')).forEach(el => el.remove());
-  DEFAULT_MAP_DATA.nodes.forEach(n => {
-    const el = document.createElement('div'); el.className = 'map-node'; el.dataset.id = n.id; el.style.left = n.x + '%'; el.style.top = n.y + '%';
-    if (DEFAULT_MAP_DATA.spawns.p1.includes(n.id)) el.style.borderColor = '#4d7cfe';
-    if (DEFAULT_MAP_DATA.spawns.p2.includes(n.id)) el.style.borderColor = '#ff5a6e';
-    el.onclick = () => handleNodeClickUI(n.id); container.appendChild(el);
-  });
-  const posMap = {}; const allChars = [...pub.p1.chars.map(c => ({...c, pIdx: 0})), ...pub.p2.chars.map(c => ({...c, pIdx: 1}))].filter(c => c.hp > 0);
-  allChars.forEach(c => { if (!posMap[c.pos]) posMap[c.pos] = []; posMap[c.pos].push(c); });
-  Object.keys(posMap).forEach(posId => {
-    const chars = posMap[posId]; const node = DEFAULT_MAP_DATA.nodes.find(n => n.id === posId); if (!node) return;
-    if (chars.length > 1) { const warn = document.createElement('div'); warn.className = 'map-warn'; warn.textContent = '⚠️'; warn.style.left = node.x + '%'; warn.style.top = (node.y - 8) + '%'; container.appendChild(warn); }
-    chars.forEach((c, index) => {
-      const el = document.createElement('div'); el.className = `map-char p${c.pIdx+1}`; el.textContent = c.icon; el.dataset.hp = `${c.hp}/${c.maxHp}`;
-      let dx = 0, dy = 0; if (chars.length === 2) { dx = index === 0 ? -8 : 8; dy = index === 0 ? -4 : 4; } else if (chars.length >= 3) { if (index === 0) { dx = -8; dy = -8; } else if (index === 1) { dx = 8; dy = -8; } else { dx = 0; dy = 8; } }
-      el.style.left = `calc(${node.x}% + ${dx}px)`; el.style.top = `calc(${node.y}% + ${dy}px)`; el.style.transform = 'translate(-50%, -50%)'; container.appendChild(el);
-    });
-  });
-}
-
-window.localUIState = { phase: 'action', selectedDice: new Set(), pendingSkill: null, pendingTarget: null, pendingChar: null };
-
-function renderControlsUI(pub) {
-  const banner = document.getElementById('turnBanner'); const btns = document.getElementById('actionBtns'); const hint = document.getElementById('hintText');
-  const isMyTurn = pub.active_player === myRole;
-  if (pub.status === 'gameover') { banner.textContent = '对局已结束'; btns.innerHTML = ''; return; }
-  if (!isMyTurn) { banner.innerHTML = `等待 <b>${pub[pub.active_player].name}</b> 行动...`; btns.innerHTML = ''; hint.hidden = true; window.localUIState.phase = 'action'; window.localUIState.pendingChar = null; return; }
-  const me = pub[myRole]; const myPrivate = currentGameState[myRole === 'p1' ? 'private_p1' : 'private_p2'];
-  if (localUIState.phase === 'action' || localUIState.phase === 'choice') {
-    banner.innerHTML = `<b>你的回合</b> ${localUIState.pendingChar ? `—— 已选中【${me.chars[localUIState.pendingChar.cIdx].name}】` : ''}`; btns.innerHTML = '';
-    if (localUIState.pendingChar) {
-      const char = me.chars[localUIState.pendingChar.cIdx];
-      if (char.hp > 0) {
-        const moveBtn = document.createElement('button'); moveBtn.className = 'act-btn move'; moveBtn.textContent = '移动 (耗1骰)'; moveBtn.onclick = () => { localUIState.phase = 'moving'; renderFromCloud(); }; btns.appendChild(moveBtn);
-        char.skills.forEach(sid => {
-          const sk = SKILLS[sid]; const skBtn = document.createElement('button'); skBtn.className = 'act-btn skill'; skBtn.innerHTML = `${sk.icon} ${sk.name} <br><small style="font-size:10px">${sk.costDesc}</small>`;
-          skBtn.disabled = !(myPrivate.dice_points.length >= sk.diceCount); skBtn.onclick = () => { localUIState.phase = 'targeting'; localUIState.pendingSkill = sid; renderFromCloud(); }; btns.appendChild(skBtn);
+        const { data, error } = await client.from('rooms').insert({
+          room_id: code,
+          public_state: { status: 'waiting', turn: 1 },
+          private_p1: { test: true }
         });
+
+        if (error) throw new Error(error.message);
+
+        document.getElementById('lobbyScreen').style.display = 'none';
+        document.getElementById('waitScreen').style.display = 'block';
+        document.getElementById('displayRoomCode').textContent = code;
+
+        // 进入监听状态
+        client.channel('room_' + code)
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `room_id=eq.${code}` }, payload => {
+            if (payload.new.public_state.status === 'playing') {
+              document.getElementById('waitScreen').style.display = 'none';
+              document.getElementById('gameScreen').style.display = 'block';
+            }
+          }).subscribe();
+
+      } catch (err) {
+        alert('创建失败：\n' + err.message);
+        btn.textContent = '创建新房间';
       }
     }
-    const endBtn = document.createElement('button'); endBtn.className = 'act-btn end'; endBtn.textContent = '结束 (标记先手)'; endBtn.onclick = () => submitAction({ action: 'end' }); btns.appendChild(endBtn);
-    const skipBtn = document.createElement('button'); skipBtn.className = 'act-btn skip'; skipBtn.textContent = '跳过 (交出行动权)'; skipBtn.onclick = () => submitAction({ action: 'skip' }); btns.appendChild(skipBtn);
-    if (localUIState.pendingChar) { const cancelBtn = document.createElement('button'); cancelBtn.className = 'act-btn cancel'; cancelBtn.textContent = '取消选中'; cancelBtn.onclick = () => { localUIState.pendingChar = null; renderFromCloud(); }; btns.appendChild(cancelBtn); }
-  } else if (localUIState.phase === 'moving') {
-    banner.innerHTML = `<b>请选择移动目标</b> —— 移动至多 2 格`; btns.innerHTML = '';
-    const cancelBtn = document.createElement('button'); cancelBtn.className = 'act-btn cancel'; cancelBtn.textContent = '取消移动'; cancelBtn.onclick = () => { localUIState.phase = 'action'; renderFromCloud(); }; btns.appendChild(cancelBtn);
-    hint.hidden = false; hint.className = 'hint-text ok'; hint.textContent = '点击地图上高亮的节点';
-    const myChar = me.chars[localUIState.pendingChar.cIdx];
-    document.querySelectorAll('.map-node').forEach(el => { const id = el.dataset.id; if (calculateDistance(myChar.pos, id) > 0 && calculateDistance(myChar.pos, id) <= 2) el.classList.add('highlight'); });
-  } else if (localUIState.phase === 'targeting') {
-    const sk = SKILLS[localUIState.pendingSkill]; banner.innerHTML = `<b>准备释放【${sk.name}】</b>`; btns.innerHTML = '';
-    const cancelBtn = document.createElement('button'); cancelBtn.className = 'act-btn cancel'; cancelBtn.textContent = '取消技能'; cancelBtn.onclick = () => { localUIState.phase = 'action'; localUIState.pendingSkill = null; renderFromCloud(); }; btns.appendChild(cancelBtn);
-    hint.hidden = false; hint.className = 'hint-text warn'; hint.textContent = `目标：${sk.target === 'enemy' ? '敌方' : '友方'}，射程：${sk.range}`;
-    const myChar = me.chars[localUIState.pendingChar.cIdx];
-    document.querySelectorAll('.map-node').forEach(el => {
-      const id = el.dataset.id; const targetP = (pub.p1.chars.some(c=>c.hp>0 && c.pos===id)) ? 'p1' : (pub.p2.chars.some(c=>c.hp>0 && c.pos===id)) ? 'p2' : null;
-      if (targetP && ((sk.target === 'enemy' && targetP !== myRole) || (sk.target === 'ally' && targetP === myRole))) {
-        const dist = calculateDistance(myChar.pos, id); if (dist > 0 && dist <= sk.range) { el.classList.add('targetable'); if (targetP === myRole) el.classList.add('ally'); }
+
+    async function joinRoom() {
+      const btn = document.getElementById('btnJoin');
+      btn.textContent = '正在连接...';
+      try {
+        const code = document.getElementById('joinRoomCode').value.trim();
+        if (code.length !== 6) throw new Error('房间码必须是 6 位');
+
+        const { data, error } = await client.from('rooms').select('*').eq('room_id', code).single();
+        if (error || !data) throw new Error('找不到这个房间！');
+        
+        const newPublic = data.public_state;
+        newPublic.status = 'playing';
+
+        await client.from('rooms').update({ public_state: newPublic }).eq('room_id', code);
+        
+        document.getElementById('lobbyScreen').style.display = 'none';
+        document.getElementById('gameScreen').style.display = 'block';
+
+      } catch (err) {
+        alert('加入失败：\n' + err.message);
+        btn.textContent = '加入房间';
       }
-    });
-  } else if (localUIState.phase === 'select_dice') {
-    const sk = SKILLS[localUIState.pendingSkill]; banner.innerHTML = `<b>选择骰子</b> —— ${sk.costDesc}`; btns.innerHTML = '';
-    const selectedVals = Array.from(localUIState.selectedDice).map(idx => myPrivate.dice_points[idx]); const valid = sk.validate(selectedVals);
-    hint.hidden = false; hint.className = 'hint-text ' + (valid?'ok':'warn'); hint.textContent = `已选 ${selectedVals.length}/${sk.diceCount} 个：${selectedVals.join(', ')}`;
-    const confirmBtn = document.createElement('button'); confirmBtn.className = 'act-btn end'; confirmBtn.textContent = '确认释放'; confirmBtn.disabled = !valid; confirmBtn.onclick = () => submitAction({ action: 'skill', skill: localUIState.pendingSkill, target: localUIState.pendingTarget, diceIndices: Array.from(localUIState.selectedDice) }); btns.appendChild(confirmBtn);
-    const cancelBtn = document.createElement('button'); cancelBtn.className = 'act-btn cancel'; cancelBtn.textContent = '取消'; cancelBtn.onclick = () => { localUIState.phase = 'action'; localUIState.selectedDice.clear(); renderFromCloud(); }; btns.appendChild(cancelBtn);
-  }
-  const logList = document.getElementById('logList'); logList.innerHTML = pub.logs.map(l => `<div class="log-item ${l.type}">${l.text}</div>`).join(''); logList.scrollTop = logList.scrollHeight;
-}
-
-function calculateDistance(startId, endId) {
-  if (startId === endId) return 0; const queue = [{ id: startId, d: 0 }]; const visited = new Set([startId]); const adj = {};
-  DEFAULT_MAP_DATA.nodes.forEach(n => adj[n.id] = []); DEFAULT_MAP_DATA.edges.forEach(([a, b]) => { if(adj[a] && adj[b]){ adj[a].push(b); adj[b].push(a); } });
-  while (queue.length > 0) { const { id, d } = queue.shift(); if (id === endId) return d; adj[id].forEach(nid => { if (!visited.has(nid)) { visited.add(nid); queue.push({ id: nid, d: d + 1 }); } }); }
-  return 99;
-}
-
-function selectCharUI(pIdx, cIdx) { if (pIdx !== (myRole === 'p1' ? 0 : 1)) return; localUIState.pendingChar = { pIdx, cIdx }; localUIState.phase = 'action'; renderFromCloud(); }
-
-function handleNodeClickUI(nodeId) {
-  if (currentGameState.public_state.active_player !== myRole) return;
-  const me = currentGameState.public_state[myRole];
-  if (localUIState.phase === 'moving') {
-    const myChar = me.chars[localUIState.pendingChar.cIdx]; const dist = calculateDistance(myChar.pos, nodeId);
-    if (dist > 0 && dist <= 2) submitAction({ action: 'move', targetPos: nodeId });
-  } else if (localUIState.phase === 'targeting') {
-    const myChar = me.chars[localUIState.pendingChar.cIdx]; const sk = SKILLS[localUIState.pendingSkill]; const dist = calculateDistance(myChar.pos, nodeId);
-    const targetP = currentGameState.public_state.p1.chars.some(c=>c.hp>0 && c.pos===nodeId) ? 'p1' : (currentGameState.public_state.p2.chars.some(c=>c.hp>0 && c.pos===nodeId) ? 'p2' : null);
-    if (targetP && dist > 0 && dist <= sk.range && ((sk.target === 'enemy' && targetP !== myRole) || (sk.target === 'ally' && targetP === myRole))) {
-      localUIState.phase = 'select_dice'; localUIState.pendingTarget = nodeId; localUIState.selectedDice.clear(); renderFromCloud();
     }
-  }
-}
-
-function handleDieClickUI(pIdx, idx, val) {
-  if (localUIState.phase !== 'select_dice') return;
-  const sk = SKILLS[localUIState.pendingSkill];
-  if (localUIState.selectedDice.has(idx)) localUIState.selectedDice.delete(idx);
-  else if (localUIState.selectedDice.size < sk.diceCount) localUIState.selectedDice.add(idx);
-  renderFromCloud();
-}
-
-async function submitAction(payload) {
-  const pub = JSON.parse(JSON.stringify(currentGameState.public_state)); const myPrivate = JSON.parse(JSON.stringify(currentGameState[myRole === 'p1' ? 'private_p1' : 'private_p2']));
-  const me = pub[myRole]; const opp = pub[myRole === 'p1' ? 'p2' : 'p1']; const oppRole = myRole === 'p1' ? 'p2' : 'p1'; let logMsg = '';
-
-  if (payload.action === 'move') {
-    const c = me.chars[localUIState.pendingChar.cIdx]; c.pos = payload.targetPos; me.dice_count -= 1; myPrivate.dice_points.pop(); logMsg = `${me.name} 移动了【${c.name}】`;
-  } else if (payload.action === 'skill') {
-    const sk = SKILLS[payload.skill]; const c = me.chars[localUIState.pendingChar.cIdx];
-    const indices = payload.diceIndices.sort((a,b)=>b-a); indices.forEach(idx => myPrivate.dice_points.splice(idx, 1)); me.dice_count -= sk.diceCount;
-    if (sk.effect.dmg) {
-      const targetChar = opp.chars.find(tc => tc.pos === payload.target && tc.hp > 0);
-      if (targetChar) { let dmg = sk.effect.dmg; if (targetChar.shield > 0) { const absorb = Math.min(targetChar.shield, dmg); targetChar.shield -= absorb; dmg -= absorb; } targetChar.hp = Math.max(0, targetChar.hp - dmg); logMsg = `${me.name} 的【${c.name}】对【${targetChar.name}】使用【${sk.name}】，造成 ${dmg} 伤害`; }
-    }
-    if (sk.type === 'attack') { pub.active_player = oppRole; pub.first_player = oppRole; }
-  } else if (payload.action === 'end') { pub.active_player = oppRole; pub.first_player = oppRole; pub.turn += 1; logMsg = `${me.name} 结束回合并将先手交给对方`; }
-  else if (payload.action === 'skip') { pub.active_player = oppRole; logMsg = `${me.name} 跳过行动`; }
-
-  pub.logs.push({ text: logMsg, type: payload.action === 'skill' ? 'attack' : 'sys' }); if (pub.logs.length > 20) pub.logs.shift();
-  if (opp.chars.every(c => c.hp <= 0)) { pub.status = 'gameover'; pub.logs.push({ text: `🏆 ${me.name} 获得胜利！`, type: 'win' }); }
-
-  localUIState.phase = 'action'; localUIState.pendingChar = null; localUIState.pendingSkill = null; localUIState.pendingTarget = null; localUIState.selectedDice.clear();
-  const updateData = { public_state: pub }; if (myRole === 'p1') updateData.private_p1 = myPrivate; else updateData.private_p2 = myPrivate;
-  const { error } = await supabase.from('rooms').update(updateData).eq('room_id', myRoomId);
-  if (error) alert('同步数据失败: ' + error.message);
-}
-</script>
+  </script>
 </body>
 </html>
