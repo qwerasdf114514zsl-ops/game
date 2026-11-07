@@ -29,21 +29,25 @@
   .char-card{ display:flex; gap:10px; align-items:center; padding:8px; border-radius:10px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); cursor:pointer;}
   .char-card.selected{border-color:#ffd76a;}
   .char-card.dead{opacity:.3; pointer-events:none;}
-  .char-avatar{ width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px;}
+  .char-avatar{ width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; overflow:hidden;}
+  .char-avatar img{ width:100%; height:100%; object-fit:cover;}
   .p1-avatar{background:#4d7cfe;} .p2-avatar{background:#ff5a6e;}
   .char-info{flex:1; display:flex; flex-direction:column; gap:2px;}
   .char-name{font-size:13px; font-weight:700;}
   .char-hp-bar{height:6px; background:rgba(255,255,255,.1); border-radius:3px; overflow:hidden;}
   .char-hp-fill{height:100%; background:#35d6a4;}
   .char-hp-text{font-size:10px; color:var(--muted); text-align:right;}
+  .buff-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .buff-item { font-size: 10px; background: rgba(255,255,255,.1); padding: 1px 4px; border-radius: 4px; border: 1px solid rgba(255,255,255,.2); }
   .center-panel{ grid-column: 2 / 3; display:flex; flex-direction:column; gap:10px; background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:12px;}
-  .map-container{ position:relative; width:100%; aspect-ratio: 4/5; max-height:65vh; background:var(--panel); border:1px solid var(--border); border-radius:16px; overflow:hidden; touch-action: none; margin:0 auto;}
+  .map-container{ position:relative; width:100%; aspect-ratio: 4/5; max-height:60vh; background:var(--panel); border:1px solid var(--border); border-radius:16px; overflow:hidden; touch-action: none; margin:0 auto;}
   svg.map-lines{position:absolute; inset:0; width:100%; height:100%; pointer-events:none;}
   .map-node{ position:absolute; width:32px; height:32px; transform:translate(-50%,-50%); border-radius:50%; background:rgba(255,255,255,.05); border:2px solid rgba(255,255,255,.3); z-index:5; display:flex; justify-content:center; align-items:center; font-size:11px; font-weight:bold;}
   .map-node.highlight{ background:rgba(77,124,254,.4); border-color:#4d7cfe; cursor:pointer;}
   .map-node.targetable{ background:rgba(255,90,110,.4); border-color:#ff5a6e; cursor:pointer;}
   .map-node.targetable.ally{ background:rgba(53,214,164,.4); border-color:#35d6a4;}
-  .map-char{ position:absolute; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; color:#fff; z-index:10; border:2px solid #fff; pointer-events:none; transition: all 0.3s;}
+  .map-char{ position:absolute; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; color:#fff; z-index:10; border:2px solid #fff; pointer-events:none; transition: all 0.3s; overflow:hidden;}
+  .map-char img{ width:100%; height:100%; object-fit:cover;}
   .map-char.p1{background:#4d7cfe;} .map-char.p2{background:#ff5a6e;}
   .map-char::after{ content: attr(data-hp); position:absolute; top:-16px; background:rgba(0,0,0,.85); font-size:10px; padding:1px 5px; border-radius:4px;}
   .turn-banner{ font-size:14px; padding:10px 14px; border-radius:10px; background:rgba(77,124,254,.2); border:1px solid rgba(120,160,255,.3);}
@@ -54,8 +58,8 @@
   .act-btn.end{background:rgba(53,214,164,.15); border-color:#35d6a4; color:#a9f5da;}
   .act-btn.skip{background:rgba(255,180,84,.15); border-color:#ffb454; color:#ffd9a0;}
   .act-btn.cancel{background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.2); color:#ddd;}
+  .act-btn.debug{background:rgba(155,109,255,.15); border-color:#9b6dff; color:#d4bfff;}
   .hint-text{font-size:12px; color:#b9c8ea; padding:8px; background:rgba(0,0,0,.2); border-radius:8px;}
-  .hint-text.warn{color:#ffb454;} .hint-text.ok{color:#35d6a4;}
   .log-panel{ background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:10px 14px; grid-column: 1 / -1;}
   .log-title{font-size:11px; letter-spacing:2px; color:var(--muted); margin-bottom:6px;}
   .log-list{ height:80px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; font-size:12px; color:#9aa8c8;}
@@ -65,12 +69,19 @@
   .modal-card h2{margin:0; color:#ffd76a; font-size:22px;}
   .modal-card input{ font-size:16px; text-align:center; padding:12px; border-radius:10px; border:none; background:rgba(0,0,0,.3); color:#fff;}
   .modal-btn{ font-size:15px; font-weight:bold; padding:12px; border-radius:10px; border:none; cursor:pointer; background:#4d7cfe; color:#fff;}
-  @media (max-width: 1024px){ .main-layout{grid-template-columns: 1fr; } .center-panel{grid-column: 1;} }
+  
+  /* 手机端专属排版：让地图在上方，卡片在下方 */
+  @media (max-width: 1024px){ 
+    .main-layout{ display: flex; flex-direction: column; } 
+    .center-panel{ order: -1; width: 100%; box-sizing: border-box; } 
+    .player-panel { width: 100%; box-sizing: border-box; }
+    .map-container{ max-height: 45vh; } 
+  }
 </style>
 </head>
 <body>
 <script>
-  window.onerror = function(msg, url, line) { alert("代码报错: " + msg); };
+  window.onerror = function(msg, url, line) { alert("代码报错: " + msg + " 行号:" + line); };
 </script>
 
 <div class="modal-mask" id="lobbyScreen">
@@ -95,13 +106,14 @@
     <div class="hdr-spacer"></div><button class="hdr-btn" onclick="location.reload()">退出</button>
   </header>
   <main class="main-layout">
-    <section class="player-panel" id="panel0"><div class="pp-head" id="name0">玩家 1</div><div class="dice-pool" id="dice0"></div><div class="chars-list" id="chars0"></div></section>
+    <!-- 手机端会先显示 center-panel，再显示 player-panel -->
     <section class="center-panel">
       <div class="map-container" id="mapContainer"><svg class="map-lines" id="mapSvg"></svg></div>
       <div class="turn-banner" id="turnBanner">准备开始</div>
       <div class="action-btns" id="actionBtns"></div>
       <div class="hint-text" id="hintText" hidden></div>
     </section>
+    <section class="player-panel" id="panel0"><div class="pp-head" id="name0">玩家 1</div><div class="dice-pool" id="dice0"></div><div class="chars-list" id="chars0"></div></section>
     <section class="player-panel" id="panel1"><div class="pp-head" id="name1">玩家 2</div><div class="dice-pool" id="dice1"></div><div class="chars-list" id="chars1"></div></section>
     <footer class="log-panel"><div class="log-title">战 斗 日 志</div><div class="log-list" id="logList"></div></footer>
   </main>
@@ -118,6 +130,7 @@ const DEFAULT_MAP_DATA = {
   "edges":[["0","1"],["1","2"],["2","3"],["3","4"],["4","5"],["5","6"],["6","7"],["7","8"],["8","9"],["9","10"],["10","11"],["11","12"],["12","13"],["15","16"],["16","17"],["19","20"],["20","21"],["23","24"],["24","25"],["25","26"],["4","31"],["31","32"],["32","33"],["33","34"],["34","35"],["26","2"],["23","103"],["103","21"],["19","101"],["101","34"],["34","17"],["35","102"],["16","104"],["104","106"],["106","105"],["105","10"],["15","13"],["15","12"],["13","100"],["100","108"],["3","5"]],
   "spawns": { "p1": ["0", "4", "8"], "p2": ["21", "102", "108"] }
 };
+
 const SKILLS = {
   warrior1: { name: '猛击', icon: '⚔️', type: 'attack', range: 1, target: 'enemy', diceCount: 1, costDesc: '任意 1 骰', validate: v => v.length === 1, effect: { dmg: 8 } },
   warrior2: { name: '重斩', icon: '💥', type: 'attack', range: 1, target: 'enemy', diceCount: 2, costDesc: '2 骰，和 ≥ 9', validate: v => v.length === 2 && v[0]+v[1] >= 9, effect: { dmg: 20 } },
@@ -126,11 +139,14 @@ const SKILLS = {
   archer1:  { name: '射击', icon: '🏹', type: 'attack', range: 2, target: 'enemy', diceCount: 1, costDesc: '任意 1 骰', validate: v => v.length === 1, effect: { dmg: 7 } },
   archer2:  { name: '穿透箭', icon: '🎯', type: 'attack', range: 3, target: 'enemy', diceCount: 2, costDesc: '2 骰，和 ≥ 7', validate: v => v.length === 2 && v[0]+v[1] >= 7, effect: { dmg: 16 } }
 };
+
 const CHAR_TEMPLATES = {
   warrior: { name: '战士', icon: '🛡️', maxHp: 35, skills: ['warrior1', 'warrior2'] },
   mage:    { name: '法师', icon: '🔮', maxHp: 20, skills: ['mage1', 'mage2'] },
-  archer:  { name: '射手', icon: '🏹', maxHp: 24, skills: ['archer1', 'archer2'] }
+  kars:    { name: '卡兹', icon: '<img src="https://raw.githubusercontent.com/qwerasdf114514zsl-ops/game/refs/heads/main/IMG_20261107_113500.jpg" style="width:100%;height:100%;object-fit:cover;">', maxHp: 30, skills: ['warrior1', 'warrior2'] } 
 };
+
+const DEFAULT_BUFFS = { highTemp: 0, lowTemp: 0, bleed: 0, weak: 0, armorBreak: 0, strength: 0, armor: 0 };
 const localUIState = { phase: 'action', selectedDice: new Set(), pendingSkill: null, pendingTarget: null, pendingChar: null };
 
 async function createRoom() {
@@ -156,48 +172,77 @@ async function joinRoom() {
     const { data, error } = await client.from('rooms').select('*').eq('room_id', myRoomId).single();
     if (error || !data) throw new Error('找不到房间');
     if (data.public_state.status !== 'waiting') throw new Error('房间已满或已开始');
+    
     const newPublic = data.public_state; newPublic.status = 'playing'; newPublic.p2.name = myLocalName; newPublic.p2.chars = initChars('p2');
     newPublic.logs.push({ text: `${myLocalName} 加入了！`, type: 'sys' });
-    await client.from('rooms').update({ public_state: newPublic, private_p2: { dice_points: Array.from({length:8},()=>Math.floor(Math.random()*6)+1) } }).eq('room_id', myRoomId);
-    document.getElementById('lobbyScreen').hidden = true; document.getElementById('gameScreen').hidden = false;
+    
+    // 强制拉取一次最新数据，防止赋值丢失
+    const { data: updatedData, error: upErr } = await client.from('rooms').update({ public_state: newPublic, private_p2: { dice_points: Array.from({length:8},()=>Math.floor(Math.random()*6)+1) } }).eq('room_id', myRoomId).select().single();
+    if (upErr) throw new Error('加入失败');
+    
+    currentGameState = updatedData; // 立刻赋值给状态
+    document.getElementById('lobbyScreen').hidden = true; 
+    document.getElementById('gameScreen').hidden = false;
     document.getElementById('myRoomCode').textContent = myRoomId;
+    
+    renderFromCloud(); // 强制渲染一次，不等广播
     listenToRoom();
   } catch (err) { alert('失败: ' + err.message); btn.textContent = '加入房间'; }
 }
 
 function initChars(role) {
-  return ['warrior', 'mage', 'archer'].map((type, i) => {
-    const t = CHAR_TEMPLATES[type]; return { idx: i, type, name: t.name, icon: t.icon, hp: t.maxHp, maxHp: t.maxHp, shield: 0, skills: t.skills, pos: DEFAULT_MAP_DATA.spawns[role][i] };
+  return ['warrior', 'mage', 'kars'].map((type, i) => {
+    const t = CHAR_TEMPLATES[type]; 
+    return { idx: i, type, name: t.name, icon: t.icon, hp: t.maxHp, maxHp: t.maxHp, shield: 0, skills: t.skills, pos: DEFAULT_MAP_DATA.spawns[role][i], buffs: { ...DEFAULT_BUFFS } };
   });
 }
 
 function listenToRoom() {
-  client.channel('room_' + myRoomId).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `room_id=eq.${myRoomId}` }, payload => {
-    const dbData = payload.new; if (dbData.public_state.status === 'waiting' && myRole === 'p1') return;
-    if (dbData.public_state.status === 'playing') { document.getElementById('lobbyScreen').hidden = true; document.getElementById('gameScreen').hidden = false; document.getElementById('myRoomCode').textContent = myRoomId; }
+  if (roomChannel) client.removeChannel(roomChannel); // 防止重复订阅
+  roomChannel = client.channel('room_' + myRoomId).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `room_id=eq.${myRoomId}` }, payload => {
+    const dbData = payload.new; 
+    if (dbData.public_state.status === 'waiting' && myRole === 'p1') return;
+    
     currentGameState = dbData;
     const pub = dbData.public_state; const myPrivate = dbData[myRole === 'p1' ? 'private_p1' : 'private_p2'];
+    
+    // 自动重摇兜底
     if (pub.status === 'playing' && pub.active_player === myRole && (!myPrivate || !myPrivate.dice_points || myPrivate.dice_points.length !== 8)) {
       const updateData = {}; updateData[myRole === 'p1' ? 'private_p1' : 'private_p2'] = { dice_points: Array.from({length:8},()=>Math.floor(Math.random()*6)+1) };
       updateData.public_state = JSON.parse(JSON.stringify(pub)); updateData.public_state[myRole].dice_count = 8;
       updateData.public_state.logs.push({ text: `${pub[myRole].name} 重摇骰子`, type: 'sys' });
-      client.from('rooms').update(updateData).eq('room_id', myRoomId); return;
+      client.from('rooms').update(updateData).eq('room_id', myRoomId); 
+      return;
     }
     renderFromCloud();
   }).subscribe();
 }
 
+// 防崩渲染框架
 function renderFromCloud() {
-  if (!currentGameState) return; const pub = currentGameState.public_state;
-  document.getElementById('roundNum').textContent = pub.turn;
-  document.getElementById('name0').textContent = pub.p1.name + (myRole === 'p1' ? ' (你)' : '');
-  document.getElementById('name1').textContent = pub.p2.name + (myRole === 'p2' ? ' (你)' : '');
-  document.getElementById('panel0').classList.toggle('is-active', pub.active_player === 'p1');
-  document.getElementById('panel1').classList.toggle('is-active', pub.active_player === 'p2');
-  renderDiceUI(0, pub.p1.dice_count, currentGameState.private_p1, myRole === 'p1');
-  renderDiceUI(1, pub.p2.dice_count, currentGameState.private_p2, myRole === 'p2');
-  renderCharsUI(0, pub.p1.chars); renderCharsUI(1, pub.p2.chars);
-  renderMapUI(pub); renderControlsUI(pub);
+  try {
+    if (!currentGameState || !currentGameState.public_state) return; 
+    const pub = currentGameState.public_state;
+    if (!pub.p1 || !pub.p2) return; // 数据没传全
+
+    document.getElementById('lobbyScreen').hidden = true;
+    document.getElementById('gameScreen').hidden = false;
+    document.getElementById('roundNum').textContent = pub.turn;
+    document.getElementById('myRoomCode').textContent = myRoomId;
+    document.getElementById('name0').textContent = pub.p1.name + (myRole === 'p1' ? ' (你)' : '');
+    document.getElementById('name1').textContent = pub.p2.name + (myRole === 'p2' ? ' (你)' : '');
+    document.getElementById('panel0').classList.toggle('is-active', pub.active_player === 'p1');
+    document.getElementById('panel1').classList.toggle('is-active', pub.active_player === 'p2');
+
+    renderDiceUI(0, pub.p1.dice_count, currentGameState.private_p1, myRole === 'p1');
+    renderDiceUI(1, pub.p2.dice_count, currentGameState.private_p2, myRole === 'p2');
+    renderCharsUI(0, pub.p1.chars); renderCharsUI(1, pub.p2.chars);
+    renderMapUI(pub); 
+    renderControlsUI(pub);
+  } catch (err) {
+    console.error(err);
+    alert("渲染出错：" + err.message);
+  }
 }
 
 function renderDiceUI(playerIdx, count, privateData, isMe) {
@@ -211,19 +256,36 @@ function renderDiceUI(playerIdx, count, privateData, isMe) {
       if (localUIState.phase === 'select_dice' && localUIState.selectedDice.has(idx)) el.classList.add('selected');
       pool.appendChild(el);
     });
-  } else { for (let i = 0; i < count; i++) { const el = document.createElement('div'); el.className = 'die hidden-die'; pool.appendChild(el); } }
+  } else { 
+      for (let i = 0; i < (count || 0); i++) { const el = document.createElement('div'); el.className = 'die hidden-die'; pool.appendChild(el); } 
+  }
 }
 
 function renderCharsUI(playerIdx, chars) {
-  const list = document.getElementById(`chars${playerIdx}`); list.innerHTML = ''; if (!chars) return;
+  const list = document.getElementById(`chars${playerIdx}`); list.innerHTML = ''; 
+  if (!chars) return;
   chars.forEach(c => {
     const el = document.createElement('div');
     const canClick = currentGameState.public_state.status === 'playing' && currentGameState.public_state.active_player === myRole && c.hp > 0 && playerIdx === (myRole === 'p1' ? 0 : 1);
     el.className = 'char-card' + (c.hp <= 0 ? ' dead' : '');
     if (localUIState.pendingChar && localUIState.pendingChar.cIdx === c.idx && playerIdx === (myRole === 'p1'?0:1)) el.classList.add('selected');
-    const avatar = document.createElement('div'); avatar.className = `char-avatar p${playerIdx+1}-avatar`; avatar.textContent = c.icon;
+    
+    const avatar = document.createElement('div'); avatar.className = `char-avatar p${playerIdx+1}-avatar`; avatar.innerHTML = c.icon;
     const info = document.createElement('div'); info.className = 'char-info';
-    info.innerHTML = `<div class="char-name">${c.name}</div><div class="char-hp-bar"><div class="char-hp-fill" style="width:${Math.max(0, c.hp/c.maxHp*100)}%"></div></div><div class="char-hp-text">${c.hp}/${c.maxHp}</div>`;
+    
+    let buffHTML = '';
+    if (c.buffs) {
+        if(c.buffs.highTemp) buffHTML += `<span class="buff-item" style="color:#ff5a6e;">高温x${c.buffs.highTemp}</span>`;
+        if(c.buffs.lowTemp) buffHTML += `<span class="buff-item" style="color:#4d7cfe;">低温x${c.buffs.lowTemp}</span>`;
+        if(c.buffs.bleed) buffHTML += `<span class="buff-item" style="color:#ff0000;">流血x${c.buffs.bleed}</span>`;
+        if(c.buffs.weak) buffHTML += `<span class="buff-item" style="color:#aaaaaa;">虚弱x${c.buffs.weak}</span>`;
+        if(c.buffs.strength) buffHTML += `<span class="buff-item" style="color:#ffd76a;">力量x${c.buffs.strength}</span>`;
+        if(c.buffs.armorBreak) buffHTML += `<span class="buff-item" style="color:#ffaa00;">破甲x${c.buffs.armorBreak}</span>`;
+        if(c.buffs.armor) buffHTML += `<span class="buff-item" style="color:#35d6a4;">甲胄x${c.buffs.armor}</span>`;
+    }
+
+    info.innerHTML = `<div class="char-name">${c.name}</div><div class="char-hp-bar"><div class="char-hp-fill" style="width:${Math.max(0, c.hp/(c.maxHp||1)*100)}%"></div></div><div class="char-hp-text">${c.hp}/${c.maxHp}</div><div class="buff-list">${buffHTML}</div>`;
+    
     if (canClick) el.onclick = () => { localUIState.pendingChar = { pIdx: playerIdx, cIdx: c.idx }; localUIState.phase = 'action'; renderFromCloud(); };
     el.appendChild(avatar); el.appendChild(info); list.appendChild(el);
   });
@@ -245,10 +307,13 @@ function renderMapUI(pub) {
     if (DEFAULT_MAP_DATA.spawns.p2.includes(n.id)) el.style.borderColor = '#ff5a6e';
     el.onclick = () => handleNodeClickUI(n.id); container.appendChild(el);
   });
-  const allChars = [...pub.p1.chars.map(c => ({...c, pIdx: 0})), ...pub.p2.chars.map(c => ({...c, pIdx: 1}))].filter(c => c.hp > 0);
+  
+  const p1Chars = pub.p1.chars || []; const p2Chars = pub.p2.chars || [];
+  const allChars = [...p1Chars.map(c => ({...c, pIdx: 0})), ...p2Chars.map(c => ({...c, pIdx: 1}))].filter(c => c.hp > 0);
+  
   allChars.forEach(c => {
     const node = DEFAULT_MAP_DATA.nodes.find(n => n.id === c.pos); if (!node) return;
-    const el = document.createElement('div'); el.className = `map-char p${c.pIdx+1}`; el.textContent = c.icon; el.dataset.hp = `${c.hp}`;
+    const el = document.createElement('div'); el.className = `map-char p${c.pIdx+1}`; el.innerHTML = c.icon; el.dataset.hp = `${c.hp}`;
     el.style.left = node.x + '%'; el.style.top = node.y + '%'; el.style.transform = 'translate(-50%, -50%)'; container.appendChild(el);
   });
 }
@@ -256,10 +321,13 @@ function renderMapUI(pub) {
 function renderControlsUI(pub) {
   const banner = document.getElementById('turnBanner'); const btns = document.getElementById('actionBtns'); const hint = document.getElementById('hintText');
   const isMyTurn = pub.active_player === myRole;
-  if (pub.status === 'gameover') { banner.textContent = '游戏结束'; btns.innerHTML = ''; return; }
-  if (!isMyTurn) { banner.innerHTML = `等待 <b>${pub[pub.active_player].name}</b> 行动...`; btns.innerHTML = ''; hint.hidden = true; return; }
-  const me = pub[myRole]; const myPrivate = currentGameState[myRole === 'p1' ? 'private_p1' : 'private_p2'];
   
+  if (pub.status === 'gameover') { banner.textContent = '游戏结束'; btns.innerHTML = ''; return; }
+  if (!isMyTurn) { banner.innerHTML = `等待 <b>${pub[pub.active_player]?.name || '对手'}</b> 行动...`; btns.innerHTML = ''; hint.hidden = true; return; }
+  
+  const me = pub[myRole]; const myPrivate = currentGameState[myRole === 'p1' ? 'private_p1' : 'private_p2'];
+  if (!me || !myPrivate || !myPrivate.dice_points) return;
+
   if (localUIState.phase === 'action') {
     banner.innerHTML = `<b>你的回合</b> ${localUIState.pendingChar ? `—— 已选中【${me.chars[localUIState.pendingChar.cIdx].name}】` : ''}`; btns.innerHTML = '';
     if (localUIState.pendingChar) {
@@ -267,9 +335,11 @@ function renderControlsUI(pub) {
       if (char.hp > 0) {
         const moveBtn = document.createElement('button'); moveBtn.className = 'act-btn move'; moveBtn.textContent = '移动 (耗1骰)'; moveBtn.onclick = () => { localUIState.phase = 'moving'; renderFromCloud(); }; btns.appendChild(moveBtn);
         char.skills.forEach(sid => {
-          const sk = SKILLS[sid]; const skBtn = document.createElement('button'); skBtn.className = 'act-btn skill'; skBtn.innerHTML = `${sk.icon} ${sk.name}`;
+          const sk = SKILLS[sid]; if(!sk) return;
+          const skBtn = document.createElement('button'); skBtn.className = 'act-btn skill'; skBtn.innerHTML = `${sk.icon} ${sk.name}`;
           skBtn.disabled = !(myPrivate.dice_points.length >= sk.diceCount); skBtn.onclick = () => { localUIState.phase = 'targeting'; localUIState.pendingSkill = sid; renderFromCloud(); }; btns.appendChild(skBtn);
         });
+        const debugBtn = document.createElement('button'); debugBtn.className = 'act-btn debug'; debugBtn.textContent = '🧪 加点Buff'; debugBtn.onclick = () => submitAction({ action: 'debugBuff' }); btns.appendChild(debugBtn);
       }
     }
     const endBtn = document.createElement('button'); endBtn.className = 'act-btn end'; endBtn.textContent = '结束'; endBtn.onclick = () => submitAction({ action: 'end' }); btns.appendChild(endBtn);
@@ -280,9 +350,11 @@ function renderControlsUI(pub) {
     banner.innerHTML = localUIState.phase === 'moving' ? `<b>选择移动目标</b>` : `<b>选择释放目标</b>`; btns.innerHTML = '';
     const cancelBtn = document.createElement('button'); cancelBtn.className = 'act-btn cancel'; cancelBtn.textContent = '取消'; cancelBtn.onclick = () => { localUIState.phase = 'action'; localUIState.pendingSkill = null; renderFromCloud(); }; btns.appendChild(cancelBtn);
     const myChar = me.chars[localUIState.pendingChar.cIdx];
+    
+    // 安全判断高亮
     document.querySelectorAll('.map-node').forEach(el => {
-      const id = el.parentElement.dataset.id || ''; // Fix node click
-      const dist = calculateDistance(myChar.pos, id);
+      if (!el.dataset.id) return; 
+      const dist = calculateDistance(myChar.pos, el.dataset.id);
       if (localUIState.phase === 'moving' && dist > 0 && dist <= 2) el.classList.add('highlight');
     });
   } 
@@ -296,12 +368,8 @@ function renderControlsUI(pub) {
   const logList = document.getElementById('logList'); logList.innerHTML = pub.logs.map(l => `<div class="log-item ${l.type}">${l.text}</div>`).join(''); logList.scrollTop = logList.scrollHeight;
 }
 
-// 实际地图点击修正
 document.getElementById('mapSvg').parentElement.addEventListener('click', (e) => {
-  if (e.target.classList.contains('map-node')) {
-    const id = e.target.dataset.id;
-    handleNodeClickUI(id);
-  }
+  if (e.target.classList.contains('map-node') && e.target.dataset.id) { handleNodeClickUI(e.target.dataset.id); }
 });
 
 function calculateDistance(startId, endId) {
@@ -311,7 +379,7 @@ function calculateDistance(startId, endId) {
 }
 
 function handleNodeClickUI(nodeId) {
-  if (currentGameState.public_state.active_player !== myRole) return;
+  if (!currentGameState || currentGameState.public_state.active_player !== myRole) return;
   const me = currentGameState.public_state[myRole];
   if (localUIState.phase === 'moving') {
     if (calculateDistance(me.chars[localUIState.pendingChar.cIdx].pos, nodeId) <= 2) submitAction({ action: 'move', targetPos: nodeId });
@@ -334,26 +402,96 @@ function handleDieClickUI(pIdx, idx, val) {
   renderFromCloud();
 }
 
-async function submitAction(payload) {
-  const pub = JSON.parse(JSON.stringify(currentGameState.public_state)); const myPrivate = JSON.parse(JSON.stringify(currentGameState[myRole === 'p1' ? 'private_p1' : 'private_p2']));
-  const me = pub[myRole]; const opp = pub[myRole === 'p1' ? 'p2' : 'p1']; const oppRole = myRole === 'p1' ? 'p2' : 'p1'; let logMsg = '';
-  if (payload.action === 'move') {
-    me.chars[localUIState.pendingChar.cIdx].pos = payload.targetPos; me.dice_count -= 1; myPrivate.dice_points.pop(); logMsg = `移动了【${me.chars[localUIState.pendingChar.cIdx].name}】`;
-  } else if (payload.action === 'skill') {
-    const sk = SKILLS[payload.skill]; const c = me.chars[localUIState.pendingChar.cIdx];
-    const indices = payload.diceIndices.sort((a,b)=>b-a); indices.forEach(idx => myPrivate.dice_points.splice(idx, 1)); me.dice_count -= sk.diceCount;
-    if (sk.effect.dmg) {
-      const targetChar = opp.chars.find(tc => tc.pos === payload.target && tc.hp > 0);
-      if (targetChar) { let dmg = sk.effect.dmg; targetChar.hp = Math.max(0, targetChar.hp - dmg); logMsg = `【${c.name}】对【${targetChar.name}】造成 ${dmg} 伤害`; }
+// --- 核心 Buff 结算引擎 ---
+function calculateFinalDamage(source, target, baseDmg, isSkill) {
+    let logs = [];
+    let atkMod = (source.buffs.strength || 0) - (source.buffs.weak || 0);
+    let finalAtk = Math.max(0, baseDmg + atkMod);
+    if (atkMod !== 0) logs.push(`【力量/虚弱】伤害变化 ${atkMod}`);
+    source.buffs.strength = 0; source.buffs.weak = 0; 
+
+    if (isSkill) {
+        let defMod = (target.buffs.armorBreak || 0) - (target.buffs.armor || 0);
+        finalAtk = Math.max(0, finalAtk + defMod);
+        if (defMod !== 0) logs.push(`【破甲/甲胄】伤害变化 ${defMod}`);
+        target.buffs.armorBreak = 0; target.buffs.armor = 0; 
     }
-    if (sk.type === 'attack') { pub.active_player = oppRole; pub.first_player = oppRole; }
-  } else if (payload.action === 'end') { pub.active_player = oppRole; pub.first_player = oppRole; pub.turn += 1; logMsg = `结束回合`; }
-  else if (payload.action === 'skip') { pub.active_player = oppRole; logMsg = `跳过`; }
-  pub.logs.push({ text: `${me.name} ${logMsg}`, type: payload.action === 'skill' ? 'attack' : 'sys' }); if (pub.logs.length > 20) pub.logs.shift();
-  if (opp.chars.every(c => c.hp <= 0)) { pub.status = 'gameover'; pub.logs.push({ text: `🏆 ${me.name} 胜利！`, type: 'win' }); }
-  localUIState.phase = 'action'; localUIState.pendingChar = null; localUIState.pendingSkill = null; localUIState.pendingTarget = null; localUIState.selectedDice.clear();
-  const updateData = { public_state: pub }; if (myRole === 'p1') updateData.private_p1 = myPrivate; else updateData.private_p2 = myPrivate;
-  await client.from('rooms').update(updateData).eq('room_id', myRoomId);
+    return { dmg: finalAtk, logs };
+}
+
+function processEndOfTurn(chars) {
+    let logs = [];
+    chars.forEach(c => {
+        if (c.hp <= 0 || !c.buffs) return;
+        let high = c.buffs.highTemp || 0; let low = c.buffs.lowTemp || 0;
+        let cancel = Math.min(high, low);
+        if (cancel > 0) {
+            c.buffs.highTemp -= cancel; c.buffs.lowTemp -= cancel;
+            c.hp = Math.max(0, c.hp - (cancel * 2));
+            logs.push(`${c.name} 受到 ${cancel*2} 点属性抵消真实伤害`);
+        }
+        let bleed = c.buffs.bleed || 0;
+        if (bleed > 0) {
+            c.hp = Math.max(0, c.hp - bleed);
+            c.buffs.bleed = 0;
+            logs.push(`${c.name} 受到 ${bleed} 点流血伤害`);
+        }
+    });
+    return logs;
+}
+
+async function submitAction(payload) {
+  try {
+    const pub = JSON.parse(JSON.stringify(currentGameState.public_state)); 
+    const myPrivate = JSON.parse(JSON.stringify(currentGameState[myRole === 'p1' ? 'private_p1' : 'private_p2']));
+    const me = pub[myRole]; const opp = pub[myRole === 'p1' ? 'p2' : 'p1']; const oppRole = myRole === 'p1' ? 'p2' : 'p1'; let logMsg = '';
+
+    if (payload.action === 'debugBuff') {
+        const c = me.chars[localUIState.pendingChar.cIdx];
+        c.buffs.strength = 2; c.buffs.weak = 1; c.buffs.armorBreak = 2; c.buffs.armor = 1; c.buffs.bleed = 3; c.buffs.highTemp = 2; c.buffs.lowTemp = 1;
+        logMsg = `给【${c.name}】测试加满了 Buff`;
+        pub.logs.push({ text: logMsg, type: 'sys' });
+        localUIState.pendingChar = null;
+        return await client.from('rooms').update({ public_state: pub }).eq('room_id', myRoomId);
+    }
+
+    if (payload.action === 'move') {
+      me.chars[localUIState.pendingChar.cIdx].pos = payload.targetPos; 
+      me.dice_count -= 1; myPrivate.dice_points.pop(); 
+      logMsg = `移动了【${me.chars[localUIState.pendingChar.cIdx].name}】`;
+    } else if (payload.action === 'skill') {
+      const sk = SKILLS[payload.skill]; const c = me.chars[localUIState.pendingChar.cIdx];
+      const indices = payload.diceIndices.sort((a,b)=>b-a); indices.forEach(idx => myPrivate.dice_points.splice(idx, 1)); me.dice_count -= sk.diceCount;
+      if (sk.effect.dmg) {
+        const targetChar = opp.chars.find(tc => tc.pos === payload.target && tc.hp > 0);
+        if (targetChar) { 
+            const dmgResult = calculateFinalDamage(c, targetChar, sk.effect.dmg, true);
+            targetChar.hp = Math.max(0, targetChar.hp - dmgResult.dmg); 
+            logMsg = `【${c.name}】对【${targetChar.name}】造成 ${dmgResult.dmg} 伤害。${dmgResult.logs.join('，')}`; 
+        }
+      }
+      if (sk.type === 'attack') { pub.active_player = oppRole; pub.first_player = oppRole; }
+    } else if (payload.action === 'end') { 
+        pub.active_player = oppRole; pub.first_player = oppRole; pub.turn += 1; logMsg = `结束回合`; 
+        const p1Buffs = processEndOfTurn(pub.p1.chars);
+        const p2Buffs = processEndOfTurn(pub.p2.chars);
+        if(p1Buffs.length) pub.logs.push({ text: p1Buffs.join('；'), type: 'sys' });
+        if(p2Buffs.length) pub.logs.push({ text: p2Buffs.join('；'), type: 'sys' });
+    }
+    else if (payload.action === 'skip') { pub.active_player = oppRole; logMsg = `跳过`; }
+    
+    // 修复了这里 type 赋值为函数的问题
+    pub.logs.push({ text: `${me.name} ${logMsg}`, type: payload.action === 'skill' ? 'attack' : 'sys' }); 
+    if (pub.logs.length > 20) pub.logs.shift();
+    if (opp.chars.every(c => c.hp <= 0)) { pub.status = 'gameover'; pub.logs.push({ text: `🏆 ${me.name} 胜利！`, type: 'win' }); }
+    
+    localUIState.phase = 'action'; localUIState.pendingChar = null; localUIState.pendingSkill = null; localUIState.pendingTarget = null; localUIState.selectedDice.clear();
+    
+    const updateData = { public_state: pub }; if (myRole === 'p1') updateData.private_p1 = myPrivate; else updateData.private_p2 = myPrivate;
+    await client.from('rooms').update(updateData).eq('room_id', myRoomId);
+  } catch (err) {
+    alert("操作失败: " + err.message);
+  }
 }
 </script>
 </body>
