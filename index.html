@@ -39,6 +39,7 @@
   .char-hp-text{font-size:10px; color:var(--muted); text-align:right;}
   .buff-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
   .buff-item { font-size: 10px; background: rgba(255,255,255,.1); padding: 1px 4px; border-radius: 4px; border: 1px solid rgba(255,255,255,.2); }
+  .buff-item.maxed { background: rgba(255,215,106,.2); border-color: #ffd76a; }
   .center-panel{ grid-column: 2 / 3; display:flex; flex-direction:column; gap:10px; background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:12px;}
   .map-container{ position:relative; width:100%; aspect-ratio: 4/5; max-height:60vh; background:var(--panel); border:1px solid var(--border); border-radius:16px; overflow:hidden; margin:0 auto;}
   svg.map-lines{position:absolute; inset:0; width:100%; height:100%; pointer-events:none;}
@@ -125,7 +126,41 @@ const SUPABASE_KEY = 'sb_publishable_s0_DdhJkssY-wwRzWUyZCA_QG8onczZ';
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let myRole = null, myRoomId = null, myLocalName = '玩家', roomChannel = null, currentGameState = null;
 let lastActivePlayer = null;
-let rerollInProgress = false;
+let roundStartInProgress = false;
+
+// ===== Buff 叠层上限 =====
+const BUFF_MAX_STACK = 3;
+
+// 特殊角色 / 特殊 buff 的扩展点：未来可以在 type / 角色字段 / buff key 上判断
+function getBuffMaxStack(char, key) {
+  // 目前所有 buff 统一上限 3；特殊规则后续在此分支
+  return BUFF_MAX_STACK;
+}
+
+// 统一加 buff 入口：clamp 到 0..max
+function addBuff(char, key, amount) {
+  if (!char || !char.buffs) return;
+  const cur = char.buffs[key] || 0;
+  const max = getBuffMaxStack(char, key);
+  char.buffs[key] = Math.max(0, Math.min(max, cur + amount));
+}
+
+// 修正单个角色的所有 buff：负数归零、超上限压低
+function clampCharBuffs(char) {
+  if (!char || !char.buffs) return;
+  Object.keys(char.buffs).forEach(key => {
+    const max = getBuffMaxStack(char, key);
+    const v = char.buffs[key] || 0;
+    if (v > max) char.buffs[key] = max;
+    if (v < 0) char.buffs[key] = 0;
+  });
+}
+
+// 修正双方所有角色的 buff（用于接收 Realtime 数据后的健康检查）
+function clampAllBuffs(pub) {
+  if (!pub) return;
+  [...(pub.p1?.chars || []), ...(pub.p2?.chars || [])].forEach(clampCharBuffs);
+}
 
 const DEFAULT_MAP_DATA = {
   "nodes":[{"id":"0","x":10,"y":10},{"id":"1","x":10,"y":20},{"id":"2","x":9.37,"y":30.96},{"id":"3","x":9.47,"y":42.35},{"id":"4","x":17.75,"y":49.91},{"id":"5","x":10,"y":57.55},{"id":"6","x":9.89,"y":69.3},{"id":"7","x":9.26,"y":79.6},{"id":"8","x":10,"y":90},{"id":"9","x":21.11,"y":89.95},{"id":"10","x":32.54,"y":90.17},{"id":"11","x":43.45,"y":90.17},{"id":"12","x":55.19,"y":89.91},{"id":"13","x":66.72,"y":89.82},{"id":"15","x":67.22,"y":79.82},{"id":"16","x":67.38,"y":69.47},{"id":"17","x":67.17,"y":59.47},{"id":"19","x":68.17,"y":32.28},{"id":"20","x":67.8,"y":23.27},{"id":"21","x":67.69,"y":13.97},{"id":"23","x":48.35,"y":9.73},{"id":"24","x":38.02,"y":13.57},{"id":"25","x":28.62,"y":19.08},{"id":"26","x":20.49,"y":26.54},{"id":"31","x":30.27,"y":49.89},{"id":"32","x":42.18,"y":49.73},{"id":"33","x":54.92,"y":49.91},{"id":"34","x":67.54,"y":50.17},{"id":"35","x":79.81,"y":50.26},{"id":"100","x":77.79,"y":89.64},{"id":"101","x":68.37,"y":41.45},{"id":"102","x":92.19,"y":50.05},{"id":"103","x":59.3,"y":7.4},{"id":"104","x":54.73,"y":69.8},{"id":"105","x":35.24,"y":81.5},{"id":"106","x":42.99,"y":74.26},{"id":"108","x":89.06,"y":89.51}],
@@ -219,9 +254,66 @@ function initChars(role) {
   });
 }
 
+async function handleRoundStart(dbData, myRole) {
+  if (roundStartInProgress) return;
+  roundStartInProgress = true;
+  try {
+    const pub = dbData.public_state;
+    const oppRole = myRole === 'p1' ? 'p2' : 'p1';
+    const myChoice = pub[myRole].lastChoice || null;
+    const newPublic = JSON.parse(JSON.stringify(pub));
+
+    if (myChoice === 'end') {
+      newPublic.turn += 1;
+      newPublic.first_player = myRole;
+      newPublic.p1.lastChoice = null;
+      newPublic.p2.lastChoice = null;
+      newPublic.logs.push({ text: `🏁 第 ${newPublic.turn} 回合开始！${pub[myRole].name} 先手，双方重投 8 骰`, type: 'win' });
+
+      const myDice = Array.from({length:8}, () => Math.floor(Math.random()*6)+1);
+      const oppDice = Array.from({length:8}, () => Math.floor(Math.random()*6)+1);
+      newPublic[myRole].dice_count = 8;
+      newPublic[myRole].rerolled = false;
+      newPublic[oppRole].dice_count = 8;
+      newPublic[oppRole].rerolled = false;
+
+      if (newPublic.logs.length > 20) newPublic.logs.shift();
+
+      const updateData = { public_state: newPublic };
+      updateData['private_' + myRole] = { dice_points: myDice };
+      updateData['private_' + oppRole] = { dice_points: oppDice };
+      const { error } = await client.from('rooms').update(updateData).eq('room_id', myRoomId);
+      if (error) console.error('开启新回合失败:', error.message);
+
+      currentGameState.public_state = newPublic;
+      currentGameState['private_' + myRole] = { dice_points: myDice };
+      currentGameState['private_' + oppRole] = { dice_points: oppDice };
+    } else if (myChoice === 'skip') {
+      newPublic[myRole].lastChoice = null;
+      newPublic.logs.push({ text: `▶️ ${pub[myRole].name} 回到行动阶段（跳过不推进回合，骰子保留）`, type: 'sys' });
+      if (newPublic.logs.length > 20) newPublic.logs.shift();
+
+      const { error } = await client.from('rooms').update({ public_state: newPublic }).eq('room_id', myRoomId);
+      if (error) console.error('跳过处理失败:', error.message);
+
+      currentGameState.public_state = newPublic;
+    }
+
+    localUIState.phase = 'action';
+    localUIState.pendingChar = null;
+    localUIState.pendingSkill = null;
+    localUIState.pendingTarget = null;
+    localUIState.pendingMoveDice = null;
+    localUIState.selectedDice.clear();
+    renderFromCloud();
+  } finally {
+    roundStartInProgress = false;
+  }
+}
+
 function listenToRoom() {
   if (roomChannel) client.removeChannel(roomChannel);
-  roomChannel = client.channel('room_' + myRoomId).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `room_id=eq.${myRoomId}` }, async payload => {
+  roomChannel = client.channel('room_' + myRoomId).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `room_id=eq.${myRoomId}` }, payload => {
     const dbData = payload.new; 
     if (dbData.public_state.status === 'waiting' && myRole === 'p1') return;
     
@@ -231,47 +323,8 @@ function listenToRoom() {
     const justBecameMe = pub.active_player === myRole && lastActivePlayer !== myRole;
     lastActivePlayer = pub.active_player;
     
-    if (pub.status === 'playing' && justBecameMe && !rerollInProgress) {
-      rerollInProgress = true;
-      try {
-        const newPublic = JSON.parse(JSON.stringify(pub));
-        const myChoice = newPublic[myRole].lastChoice || null;
-        
-        if (myChoice === 'end') {
-          newPublic.turn += 1;
-          newPublic.first_player = myRole;
-          newPublic.p1.lastChoice = null;
-          newPublic.p2.lastChoice = null;
-          newPublic.logs.push({ text: `🏁 ${pub[myRole].name} 开启第 ${newPublic.turn} 回合（先手）`, type: 'win' });
-        } else if (myChoice === 'skip') {
-          newPublic[myRole].lastChoice = null;
-        }
-        
-        const newDice = Array.from({length:8}, () => Math.floor(Math.random()*6)+1);
-        newPublic[myRole].dice_count = 8;
-        newPublic[myRole].rerolled = false;
-        
-        if (newPublic.logs.length > 20) newPublic.logs.shift();
-        
-        const updateData = { public_state: newPublic };
-        updateData[myRole === 'p1' ? 'private_p1' : 'private_p2'] = { dice_points: newDice };
-        const { error } = await client.from('rooms').update(updateData).eq('room_id', myRoomId);
-        if (error) console.error('回合开始处理失败:', error.message);
-        
-        currentGameState.public_state = newPublic;
-        if (myRole === 'p1') currentGameState.private_p1 = { dice_points: newDice };
-        else currentGameState.private_p2 = { dice_points: newDice };
-        
-        localUIState.phase = 'action';
-        localUIState.pendingChar = null;
-        localUIState.pendingSkill = null;
-        localUIState.pendingTarget = null;
-        localUIState.pendingMoveDice = null;
-        localUIState.selectedDice.clear();
-      } finally {
-        rerollInProgress = false;
-      }
-      renderFromCloud();
+    if (pub.status === 'playing' && justBecameMe) {
+      handleRoundStart(dbData, myRole);
       return;
     }
     renderFromCloud();
@@ -284,12 +337,16 @@ function renderFromCloud() {
     const pub = currentGameState.public_state;
     if (!pub.p1 || !pub.p2) return; 
 
+    // 渲染前做一次 buff 健康检查：历史脏数据超出上限的直接压低
+    clampAllBuffs(pub);
+
     document.getElementById('lobbyScreen').hidden = true;
     document.getElementById('gameScreen').hidden = false;
     document.getElementById('roundNum').textContent = pub.turn;
     document.getElementById('myRoomCode').textContent = myRoomId;
-    document.getElementById('name0').textContent = pub.p1.name + (myRole === 'p1' ? ' (你)' : '') + (pub.first_player === 'p1' ? ' ⭐' : '');
-    document.getElementById('name1').textContent = pub.p2.name + (myRole === 'p2' ? ' (你)' : '') + (pub.first_player === 'p2' ? ' ⭐' : '');
+    const fpTag = (role) => pub.first_player === role ? ' ⭐先手' : '';
+    document.getElementById('name0').textContent = pub.p1.name + (myRole === 'p1' ? ' (你)' : '') + fpTag('p1');
+    document.getElementById('name1').textContent = pub.p2.name + (myRole === 'p2' ? ' (你)' : '') + fpTag('p2');
     document.getElementById('panel0').classList.toggle('is-active', pub.active_player === 'p1');
     document.getElementById('panel1').classList.toggle('is-active', pub.active_player === 'p2');
 
@@ -347,15 +404,26 @@ function renderCharsUI(playerIdx, chars) {
     const avatar = document.createElement('div'); avatar.className = `char-avatar p${playerIdx+1}-avatar`; avatar.innerHTML = c.icon;
     const info = document.createElement('div'); info.className = 'char-info';
     
+    // 每个 buff 显示时若已达上限，额外加 maxed 样式（金色描边），便于视觉识别
     let buffHTML = '';
     if (c.buffs) {
-        if(c.buffs.highTemp) buffHTML += `<span class="buff-item" style="color:#ff5a6e;">高温x${c.buffs.highTemp}</span>`;
-        if(c.buffs.lowTemp) buffHTML += `<span class="buff-item" style="color:#4d7cfe;">低温x${c.buffs.lowTemp}</span>`;
-        if(c.buffs.bleed) buffHTML += `<span class="buff-item" style="color:#ff0000;">流血x${c.buffs.bleed}</span>`;
-        if(c.buffs.weak) buffHTML += `<span class="buff-item" style="color:#aaaaaa;">虚弱x${c.buffs.weak}</span>`;
-        if(c.buffs.strength) buffHTML += `<span class="buff-item" style="color:#ffd76a;">力量x${c.buffs.strength}</span>`;
-        if(c.buffs.armorBreak) buffHTML += `<span class="buff-item" style="color:#ffaa00;">破甲x${c.buffs.armorBreak}</span>`;
-        if(c.buffs.armor) buffHTML += `<span class="buff-item" style="color:#35d6a4;">甲胄x${c.buffs.armor}</span>`;
+      const buffDefs = [
+        { key: 'highTemp',  label: '高温', color: '#ff5a6e' },
+        { key: 'lowTemp',   label: '低温', color: '#4d7cfe' },
+        { key: 'bleed',     label: '流血', color: '#ff0000' },
+        { key: 'weak',      label: '虚弱', color: '#aaaaaa' },
+        { key: 'strength',  label: '力量', color: '#ffd76a' },
+        { key: 'armorBreak',label: '破甲', color: '#ffaa00' },
+        { key: 'armor',     label: '甲胄', color: '#35d6a4' }
+      ];
+      buffDefs.forEach(def => {
+        const v = c.buffs[def.key] || 0;
+        if (v > 0) {
+          const max = getBuffMaxStack(c, def.key);
+          const maxed = v >= max ? ' maxed' : '';
+          buffHTML += `<span class="buff-item${maxed}" style="color:${def.color};">${def.label}x${v}</span>`;
+        }
+      });
     }
 
     info.innerHTML = `<div class="char-name">${c.name}</div><div class="char-hp-bar"><div class="char-hp-fill" style="width:${Math.max(0, c.hp/(c.maxHp||1)*100)}%"></div></div><div class="char-hp-text">${c.hp}/${c.maxHp}</div><div class="buff-list">${buffHTML}</div>`;
@@ -404,6 +472,7 @@ function renderControlsUI(pub) {
   const isMyTurn = pub.active_player === myRole;
   
   if (pub.status === 'gameover') { banner.textContent = '游戏结束'; btns.innerHTML = ''; hint.hidden = true; return; }
+  if (pub.status !== 'playing') { banner.textContent = '等待对手加入...'; btns.innerHTML = ''; hint.hidden = true; return; }
   if (!isMyTurn) { banner.innerHTML = `等待 <b>${pub[pub.active_player]?.name || '对手'}</b> 行动...`; btns.innerHTML = ''; hint.hidden = true; return; }
   
   const me = pub[myRole]; 
@@ -411,7 +480,7 @@ function renderControlsUI(pub) {
   if (!me || !myPrivate || !myPrivate.dice_points) return;
 
   if (localUIState.phase === 'action') {
-    banner.innerHTML = `<b>你的回合</b> ${localUIState.pendingChar ? `—— 已选中【${me.chars[localUIState.pendingChar.cIdx].name}】` : ''}`; 
+    banner.innerHTML = `<b>你的回合（第 ${pub.turn} 回合）</b> ${localUIState.pendingChar ? `—— 已选中【${me.chars[localUIState.pendingChar.cIdx].name}】` : ''}`; 
     btns.innerHTML = '';
     
     if (!me.rerolled && !localUIState.pendingChar) {
@@ -464,13 +533,13 @@ function renderControlsUI(pub) {
     
     const endBtn = document.createElement('button'); 
     endBtn.className = 'act-btn end'; 
-    endBtn.textContent = '结束（开启新回合）'; 
+    endBtn.textContent = '结束（下回合先手）'; 
     endBtn.onclick = () => submitAction({ action: 'end' }); 
     btns.appendChild(endBtn);
     
     const skipBtn = document.createElement('button'); 
     skipBtn.className = 'act-btn skip'; 
-    skipBtn.textContent = '跳过（不开启新回合）'; 
+    skipBtn.textContent = '跳过（不推进回合）'; 
     skipBtn.onclick = () => submitAction({ action: 'skip' }); 
     btns.appendChild(skipBtn);
     
@@ -572,7 +641,7 @@ function renderControlsUI(pub) {
     hint.textContent = `已选：${vals.join(', ')}`;
     const confirmBtn = document.createElement('button'); 
     confirmBtn.className = 'act-btn end'; 
-    confirmBtn.textContent = '确认（攻击后强制结束回合）'; 
+    confirmBtn.textContent = '确认（攻击后强制跳过）'; 
     confirmBtn.disabled = !valid; 
     confirmBtn.onclick = () => submitAction({ action: 'skill', skill: localUIState.pendingSkill, target: localUIState.pendingTarget, diceIndices: Array.from(localUIState.selectedDice) }); 
     btns.appendChild(confirmBtn);
@@ -685,7 +754,6 @@ function processEndOfTurn(chars) {
     return logs;
 }
 
-// 修正：切换行动者并记录本轮选择，不动 turn / first_player
 function switchTurn(pub, fromRole, choice) {
   const oppRole = fromRole === 'p1' ? 'p2' : 'p1';
   const buffLogs = processEndOfTurn(pub[fromRole].chars);
@@ -701,12 +769,19 @@ async function submitAction(payload) {
     const me = pub[myRole]; 
     const opp = pub[myRole === 'p1' ? 'p2' : 'p1']; 
     let logMsg = '';
-    let ended = false;
+    let ended = null;
 
     if (payload.action === 'debugBuff') {
       const c = me.chars[localUIState.pendingChar.cIdx];
-      c.buffs.strength = 2; c.buffs.weak = 1; c.buffs.armorBreak = 2; c.buffs.armor = 1; c.buffs.bleed = 3; c.buffs.highTemp = 2; c.buffs.lowTemp = 1;
-      pub.logs.push({ text: `给【${c.name}】测试加满了 Buff`, type: 'sys' });
+      // 统一走 addBuff，自动 clamp 到 3 层
+      addBuff(c, 'strength', 2);
+      addBuff(c, 'weak', 1);
+      addBuff(c, 'armorBreak', 2);
+      addBuff(c, 'armor', 1);
+      addBuff(c, 'bleed', 3);
+      addBuff(c, 'highTemp', 2);
+      addBuff(c, 'lowTemp', 1);
+      pub.logs.push({ text: `给【${c.name}】测试加 Buff（已受 3 层上限约束）`, type: 'sys' });
       localUIState.pendingChar = null;
       const { error } = await client.from('rooms').update({ public_state: pub }).eq('room_id', myRoomId);
       if (error) throw new Error('同步失败: ' + error.message);
@@ -754,7 +829,7 @@ async function submitAction(payload) {
       me.rerolled = true;
       logMsg = `重摇了 ${indices.length} 个骰子`;
     } else if (payload.action === 'end') { 
-      logMsg = `结束行动阶段（期望下一回合先手）`; 
+      logMsg = `结束行动阶段（期望开启新回合）`; 
       ended = 'end';
     } else if (payload.action === 'skip') { 
       logMsg = `跳过（不开启新回合）`; 
