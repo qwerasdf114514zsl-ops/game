@@ -8,7 +8,6 @@
 <style>
   :root{ --bg:#070a12; --panel:rgba(20,28,48,.85); --border:rgba(90,130,220,.22); --accent:#4d7cfe; --text:#e8eeff; --muted:#8a97b8; }
   *{box-sizing:border-box;} [hidden]{display:none !important;}
-  /* 修复了这里：去掉了 overflow:hidden 和 flex 居中，允许页面上下滑动 */
   body{ margin:0; min-height:100vh; font-family:-apple-system,sans-serif; background:#070a12; color:var(--text); padding:10px; }
   .game{ width:100%; max-width:1400px; margin:0 auto; display:flex; flex-direction:column; gap:10px;}
   .game-header{ display:flex; align-items:center; gap:14px; padding:10px 18px; background:var(--panel); border:1px solid var(--border); border-radius:16px;}
@@ -41,7 +40,6 @@
   .buff-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
   .buff-item { font-size: 10px; background: rgba(255,255,255,.1); padding: 1px 4px; border-radius: 4px; border: 1px solid rgba(255,255,255,.2); }
   .center-panel{ grid-column: 2 / 3; display:flex; flex-direction:column; gap:10px; background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:12px;}
-  /* 修复了这里：去掉了 touch-action: none */
   .map-container{ position:relative; width:100%; aspect-ratio: 4/5; max-height:60vh; background:var(--panel); border:1px solid var(--border); border-radius:16px; overflow:hidden; margin:0 auto;}
   svg.map-lines{position:absolute; inset:0; width:100%; height:100%; pointer-events:none;}
   .map-node{ position:absolute; width:32px; height:32px; transform:translate(-50%,-50%); border-radius:50%; background:rgba(255,255,255,.05); border:2px solid rgba(255,255,255,.3); z-index:5; display:flex; justify-content:center; align-items:center; font-size:11px; font-weight:bold;}
@@ -61,18 +59,18 @@
   .act-btn.skip{background:rgba(255,180,84,.15); border-color:#ffb454; color:#ffd9a0;}
   .act-btn.cancel{background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.2); color:#ddd;}
   .act-btn.debug{background:rgba(155,109,255,.15); border-color:#9b6dff; color:#d4bfff;}
+  .act-btn:disabled{opacity:.4; cursor:not-allowed;}
   .hint-text{font-size:12px; color:#b9c8ea; padding:8px; background:rgba(0,0,0,.2); border-radius:8px;}
   .log-panel{ background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:10px 14px; grid-column: 1 / -1;}
   .log-title{font-size:11px; letter-spacing:2px; color:var(--muted); margin-bottom:6px;}
   .log-list{ height:80px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; font-size:12px; color:#9aa8c8;}
-  .log-item.attack{color:#ff8b9a;} .log-item.sys{color:#7d8aa8; font-style:italic;}
+  .log-item.attack{color:#ff8b9a;} .log-item.sys{color:#7d8aa8; font-style:italic;} .log-item.win{color:#ffd76a; font-weight:700;}
   .modal-mask{ position:fixed; inset:0; background:rgba(4,6,14,.95); display:flex; align-items:center; justify-content:center; z-index:100;}
   .modal-card{ background:#18213c; border:1px solid #4d7cfe; border-radius:20px; padding:30px; text-align:center; width:90%; max-width:400px; display:flex; flex-direction:column; gap:15px;}
   .modal-card h2{margin:0; color:#ffd76a; font-size:22px;}
   .modal-card input{ font-size:16px; text-align:center; padding:12px; border-radius:10px; border:none; background:rgba(0,0,0,.3); color:#fff;}
   .modal-btn{ font-size:15px; font-weight:bold; padding:12px; border-radius:10px; border:none; cursor:pointer; background:#4d7cfe; color:#fff;}
   
-  /* 手机端排版：允许自然上下滑动 */
   @media (max-width: 1024px){ 
     .main-layout{ display: flex; flex-direction: column; } 
     .center-panel{ order: -1; width: 100%; } 
@@ -109,7 +107,7 @@
   </header>
   <main class="main-layout">
     <section class="center-panel">
-      <div class="map-container" id="mapContainer"><svg class="map-lines" id="mapSvg"></svg></div>
+      <div class="map-container" id="mapContainer"><svg class="map-lines" id="mapSvg" preserveAspectRatio="none"></svg></div>
       <div class="turn-banner" id="turnBanner">准备开始</div>
       <div class="action-btns" id="actionBtns"></div>
       <div class="hint-text" id="hintText" hidden></div>
@@ -125,6 +123,8 @@ const SUPABASE_URL = 'https://louffiaacjcwxknzpign.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_s0_DdhJkssY-wwRzWUyZCA_QG8onczZ';
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let myRole = null, myRoomId = null, myLocalName = '玩家', roomChannel = null, currentGameState = null;
+// 修复 9：记录上一次见到的 active_player，用于"刚好轮到我"才补骰
+let lastActivePlayer = null;
 
 const DEFAULT_MAP_DATA = {
   "nodes":[{"id":"0","x":10,"y":10},{"id":"1","x":10,"y":20},{"id":"2","x":9.37,"y":30.96},{"id":"3","x":9.47,"y":42.35},{"id":"4","x":17.75,"y":49.91},{"id":"5","x":10,"y":57.55},{"id":"6","x":9.89,"y":69.3},{"id":"7","x":9.26,"y":79.6},{"id":"8","x":10,"y":90},{"id":"9","x":21.11,"y":89.95},{"id":"10","x":32.54,"y":90.17},{"id":"11","x":43.45,"y":90.17},{"id":"12","x":55.19,"y":89.91},{"id":"13","x":66.72,"y":89.82},{"id":"15","x":67.22,"y":79.82},{"id":"16","x":67.38,"y":69.47},{"id":"17","x":67.17,"y":59.47},{"id":"19","x":68.17,"y":32.28},{"id":"20","x":67.8,"y":23.27},{"id":"21","x":67.69,"y":13.97},{"id":"23","x":48.35,"y":9.73},{"id":"24","x":38.02,"y":13.57},{"id":"25","x":28.62,"y":19.08},{"id":"26","x":20.49,"y":26.54},{"id":"31","x":30.27,"y":49.89},{"id":"32","x":42.18,"y":49.73},{"id":"33","x":54.92,"y":49.91},{"id":"34","x":67.54,"y":50.17},{"id":"35","x":79.81,"y":50.26},{"id":"100","x":77.79,"y":89.64},{"id":"101","x":68.37,"y":41.45},{"id":"102","x":92.19,"y":50.05},{"id":"103","x":59.3,"y":7.4},{"id":"104","x":54.73,"y":69.8},{"id":"105","x":35.24,"y":81.5},{"id":"106","x":42.99,"y":74.26},{"id":"108","x":89.06,"y":89.51}],
@@ -178,7 +178,7 @@ async function joinRoom() {
     newPublic.logs.push({ text: `${myLocalName} 加入了！`, type: 'sys' });
     
     const { data: updatedData, error: upErr } = await client.from('rooms').update({ public_state: newPublic, private_p2: { dice_points: Array.from({length:8},()=>Math.floor(Math.random()*6)+1) } }).eq('room_id', myRoomId).select().single();
-    if (upErr) throw new Error('加入失败');
+    if (upErr) throw new Error('加入失败: ' + upErr.message);
     
     currentGameState = updatedData; 
     document.getElementById('lobbyScreen').hidden = true; 
@@ -204,13 +204,23 @@ function listenToRoom() {
     if (dbData.public_state.status === 'waiting' && myRole === 'p1') return;
     
     currentGameState = dbData;
-    const pub = dbData.public_state; const myPrivate = dbData[myRole === 'p1' ? 'private_p1' : 'private_p2'];
+    const pub = dbData.public_state; 
+    const myPrivate = dbData[myRole === 'p1' ? 'private_p1' : 'private_p2'];
     
-    if (pub.status === 'playing' && pub.active_player === myRole && (!myPrivate || !myPrivate.dice_points || myPrivate.dice_points.length !== 8)) {
-      const updateData = {}; updateData[myRole === 'p1' ? 'private_p1' : 'private_p2'] = { dice_points: Array.from({length:8},()=>Math.floor(Math.random()*6)+1) };
-      updateData.public_state = JSON.parse(JSON.stringify(pub)); updateData.public_state[myRole].dice_count = 8;
-      updateData.public_state.logs.push({ text: `${pub[myRole].name} 重摇骰子`, type: 'sys' });
-      client.from('rooms').update(updateData).eq('room_id', myRoomId); 
+    // 修复 9：只在"刚从对方回合切到我"时补骰，回合内操作不会被误判
+    const justBecameMe = pub.active_player === myRole && lastActivePlayer !== myRole;
+    lastActivePlayer = pub.active_player;
+    
+    if (pub.status === 'playing' && justBecameMe && (!myPrivate || !myPrivate.dice_points || myPrivate.dice_points.length !== 8)) {
+      const updateData = {}; 
+      updateData[myRole === 'p1' ? 'private_p1' : 'private_p2'] = { dice_points: Array.from({length:8},()=>Math.floor(Math.random()*6)+1) };
+      updateData.public_state = JSON.parse(JSON.stringify(pub)); 
+      updateData.public_state[myRole].dice_count = 8;
+      updateData.public_state.logs.push({ text: `${pub[myRole].name} 补充骰子`, type: 'sys' });
+      // 修复 8：补骰失败也要有反馈
+      client.from('rooms').update(updateData).eq('room_id', myRoomId).then(({error}) => {
+        if (error) console.error('补充骰子失败:', error.message);
+      });
       return;
     }
     renderFromCloud();
@@ -236,11 +246,26 @@ function renderFromCloud() {
     renderDiceUI(1, pub.p2.dice_count, currentGameState.private_p2, myRole === 'p2');
     renderCharsUI(0, pub.p1.chars); renderCharsUI(1, pub.p2.chars);
     renderMapUI(pub); 
+    renderLogUI(pub);
     renderControlsUI(pub);
   } catch (err) {
     console.error(err);
     alert("渲染出错：" + err.message);
   }
+}
+
+// 修复 7：日志改用 textContent，杜绝昵称注入 HTML
+function renderLogUI(pub) {
+  const logList = document.getElementById('logList');
+  if (!logList || !pub.logs) return;
+  logList.innerHTML = '';
+  pub.logs.forEach(l => {
+    const div = document.createElement('div');
+    div.className = 'log-item ' + (l.type || '');
+    div.textContent = l.text;
+    logList.appendChild(div);
+  });
+  logList.scrollTop = logList.scrollHeight;
 }
 
 function renderDiceUI(playerIdx, count, privateData, isMe) {
@@ -301,6 +326,7 @@ function renderMapUI(pub) {
   Array.from(container.querySelectorAll('.map-node, .map-char')).forEach(el => el.remove());
   DEFAULT_MAP_DATA.nodes.forEach(n => {
     const el = document.createElement('div'); el.className = 'map-node'; el.style.left = n.x + '%'; el.style.top = n.y + '%';
+    el.dataset.id = n.id;
     if (DEFAULT_MAP_DATA.spawns.p1.includes(n.id)) el.style.borderColor = '#4d7cfe';
     if (DEFAULT_MAP_DATA.spawns.p2.includes(n.id)) el.style.borderColor = '#ff5a6e';
     el.onclick = () => handleNodeClickUI(n.id); container.appendChild(el);
@@ -320,7 +346,7 @@ function renderControlsUI(pub) {
   const banner = document.getElementById('turnBanner'); const btns = document.getElementById('actionBtns'); const hint = document.getElementById('hintText');
   const isMyTurn = pub.active_player === myRole;
   
-  if (pub.status === 'gameover') { banner.textContent = '游戏结束'; btns.innerHTML = ''; return; }
+  if (pub.status === 'gameover') { banner.textContent = '游戏结束'; btns.innerHTML = ''; hint.hidden = true; return; }
   if (!isMyTurn) { banner.innerHTML = `等待 <b>${pub[pub.active_player]?.name || '对手'}</b> 行动...`; btns.innerHTML = ''; hint.hidden = true; return; }
   
   const me = pub[myRole]; const myPrivate = currentGameState[myRole === 'p1' ? 'private_p1' : 'private_p2'];
@@ -331,7 +357,9 @@ function renderControlsUI(pub) {
     if (localUIState.pendingChar) {
       const char = me.chars[localUIState.pendingChar.cIdx];
       if (char.hp > 0) {
-        const moveBtn = document.createElement('button'); moveBtn.className = 'act-btn move'; moveBtn.textContent = '移动 (耗1骰)'; moveBtn.onclick = () => { localUIState.phase = 'moving'; renderFromCloud(); }; btns.appendChild(moveBtn);
+        const moveBtn = document.createElement('button'); moveBtn.className = 'act-btn move'; moveBtn.textContent = '移动 (耗1骰)';
+        if (!myPrivate.dice_points || myPrivate.dice_points.length < 1) moveBtn.disabled = true;
+        moveBtn.onclick = () => { localUIState.phase = 'moving'; renderFromCloud(); }; btns.appendChild(moveBtn);
         char.skills.forEach(sid => {
           const sk = SKILLS[sid]; if(!sk) return;
           const skBtn = document.createElement('button'); skBtn.className = 'act-btn skill'; skBtn.innerHTML = `${sk.icon} ${sk.name}`;
@@ -345,14 +373,14 @@ function renderControlsUI(pub) {
     if (localUIState.pendingChar) { const cancelBtn = document.createElement('button'); cancelBtn.className = 'act-btn cancel'; cancelBtn.textContent = '取消'; cancelBtn.onclick = () => { localUIState.pendingChar = null; renderFromCloud(); }; btns.appendChild(cancelBtn); }
   } 
   else if (localUIState.phase === 'moving' || localUIState.phase === 'targeting') {
-    banner.innerHTML = localUIState.phase === 'moving' ? `<b>选择移动目标</b>` : `<b>选择释放目标</b>`; btns.innerHTML = '';
+    banner.innerHTML = localUIState.phase === 'moving' ? `<b>选择移动目标</b>` : `<b>选择释放目标</b>`; btns.innerHTML = ''; hint.hidden = true;
     const cancelBtn = document.createElement('button'); cancelBtn.className = 'act-btn cancel'; cancelBtn.textContent = '取消'; cancelBtn.onclick = () => { localUIState.phase = 'action'; localUIState.pendingSkill = null; renderFromCloud(); }; btns.appendChild(cancelBtn);
     const myChar = me.chars[localUIState.pendingChar.cIdx];
     
     document.querySelectorAll('.map-node').forEach(el => {
       if (!el.dataset.id) return; 
       const dist = calculateDistance(myChar.pos, el.dataset.id);
-      if (localUIState.phase === 'moving' && dist > 0 && dist <= 2) el.classList.add('highlight');
+      if (localUIState.phase === 'moving' && dist > 0 && dist <= 2 && !getNodeOccupant(pub, el.dataset.id)) el.classList.add('highlight');
     });
   } 
   else if (localUIState.phase === 'select_dice') {
@@ -362,12 +390,9 @@ function renderControlsUI(pub) {
     const confirmBtn = document.createElement('button'); confirmBtn.className = 'act-btn end'; confirmBtn.textContent = '确认'; confirmBtn.disabled = !valid; confirmBtn.onclick = () => submitAction({ action: 'skill', skill: localUIState.pendingSkill, target: localUIState.pendingTarget, diceIndices: Array.from(localUIState.selectedDice) }); btns.appendChild(confirmBtn);
     const cancelBtn = document.createElement('button'); cancelBtn.className = 'act-btn cancel'; cancelBtn.textContent = '取消'; cancelBtn.onclick = () => { localUIState.phase = 'action'; localUIState.selectedDice.clear(); renderFromCloud(); }; btns.appendChild(cancelBtn);
   }
-  const logList = document.getElementById('logList'); logList.innerHTML = pub.logs.map(l => `<div class="log-item ${l.type}">${l.text}</div>`).join(''); logList.scrollTop = logList.scrollHeight;
 }
 
-document.getElementById('mapSvg').parentElement.addEventListener('click', (e) => {
-  if (e.target.classList.contains('map-node') && e.target.dataset.id) { handleNodeClickUI(e.target.dataset.id); }
-});
+// 注意：地图点击代理已删除，避免 el.onclick + 冒泡代理重复触发。
 
 function calculateDistance(startId, endId) {
   if (startId === endId) return 0; const q = [{id:startId, d:0}], v = new Set([startId]), adj = {};
@@ -375,11 +400,24 @@ function calculateDistance(startId, endId) {
   while(q.length){const {id,d}=q.shift(); if(id===endId) return d; adj[id].forEach(nid=>{if(!v.has(nid)){v.add(nid);q.push({id:nid,d:d+1});}});} return 99;
 }
 
+function getNodeOccupant(pub, nodeId) {
+  if (!pub) return null;
+  const all = [...(pub.p1?.chars || []), ...(pub.p2?.chars || [])];
+  return all.find(c => c.hp > 0 && c.pos === nodeId) || null;
+}
+
 function handleNodeClickUI(nodeId) {
   if (!currentGameState || currentGameState.public_state.active_player !== myRole) return;
   const me = currentGameState.public_state[myRole];
   if (localUIState.phase === 'moving') {
-    if (calculateDistance(me.chars[localUIState.pendingChar.cIdx].pos, nodeId) <= 2) submitAction({ action: 'move', targetPos: nodeId });
+    const myPrivate = currentGameState[myRole === 'p1' ? 'private_p1' : 'private_p2'];
+    const char = me.chars[localUIState.pendingChar.cIdx];
+    const dist = calculateDistance(char.pos, nodeId);
+    if (dist <= 0) return;
+    if (dist > 2) return;
+    if (!myPrivate || !myPrivate.dice_points || myPrivate.dice_points.length < 1) { alert('没有可用的骰子了'); return; }
+    if (getNodeOccupant(currentGameState.public_state, nodeId)) { alert('该位置已有角色'); return; }
+    submitAction({ action: 'move', targetPos: nodeId });
   } else if (localUIState.phase === 'targeting') {
     const sk = SKILLS[localUIState.pendingSkill];
     const targetP = currentGameState.public_state.p1.chars.some(c=>c.hp>0 && c.pos===nodeId) ? 'p1' : (currentGameState.public_state.p2.chars.some(c=>c.hp>0 && c.pos===nodeId) ? 'p2' : null);
@@ -436,27 +474,47 @@ function processEndOfTurn(chars) {
     return logs;
 }
 
+// 修复 5 + 6：统一回合切换，只结算当前行动者
+function switchTurn(pub, fromRole) {
+  const oppRole = fromRole === 'p1' ? 'p2' : 'p1';
+  const buffLogs = processEndOfTurn(pub[fromRole].chars);
+  if (buffLogs.length) pub.logs.push({ text: buffLogs.join('；'), type: 'sys' });
+  pub.active_player = oppRole;
+  pub.first_player = oppRole;
+  pub.turn += 1;
+  return oppRole;
+}
+
 async function submitAction(payload) {
   try {
     const pub = JSON.parse(JSON.stringify(currentGameState.public_state)); 
     const myPrivate = JSON.parse(JSON.stringify(currentGameState[myRole === 'p1' ? 'private_p1' : 'private_p2']));
-    const me = pub[myRole]; const opp = pub[myRole === 'p1' ? 'p2' : 'p1']; const oppRole = myRole === 'p1' ? 'p2' : 'p1'; let logMsg = '';
+    const me = pub[myRole]; const opp = pub[myRole === 'p1' ? 'p2' : 'p1']; let logMsg = '';
+    let ended = false;
 
     if (payload.action === 'debugBuff') {
         const c = me.chars[localUIState.pendingChar.cIdx];
         c.buffs.strength = 2; c.buffs.weak = 1; c.buffs.armorBreak = 2; c.buffs.armor = 1; c.buffs.bleed = 3; c.buffs.highTemp = 2; c.buffs.lowTemp = 1;
-        logMsg = `给【${c.name}】测试加满了 Buff`;
-        pub.logs.push({ text: logMsg, type: 'sys' });
+        pub.logs.push({ text: `给【${c.name}】测试加满了 Buff`, type: 'sys' });
         localUIState.pendingChar = null;
-        return await client.from('rooms').update({ public_state: pub }).eq('room_id', myRoomId);
+        // 修复 8：检查 error
+        const { error } = await client.from('rooms').update({ public_state: pub }).eq('room_id', myRoomId);
+        if (error) throw new Error('同步失败: ' + error.message);
+        return;
     }
 
     if (payload.action === 'move') {
-      me.chars[localUIState.pendingChar.cIdx].pos = payload.targetPos; 
+      if (!myPrivate.dice_points || myPrivate.dice_points.length < 1) throw new Error('没有可用的骰子了');
+      const moveChar = me.chars[localUIState.pendingChar.cIdx];
+      const dist = calculateDistance(moveChar.pos, payload.targetPos);
+      if (dist <= 0 || dist > 2) throw new Error('移动距离不合法');
+      if (getNodeOccupant(pub, payload.targetPos)) throw new Error('该位置已有角色');
+      moveChar.pos = payload.targetPos; 
       me.dice_count -= 1; myPrivate.dice_points.pop(); 
-      logMsg = `移动了【${me.chars[localUIState.pendingChar.cIdx].name}】`;
+      logMsg = `移动了【${moveChar.name}】`;
     } else if (payload.action === 'skill') {
       const sk = SKILLS[payload.skill]; const c = me.chars[localUIState.pendingChar.cIdx];
+      if (!myPrivate.dice_points || myPrivate.dice_points.length < sk.diceCount) throw new Error('骰子数量不足');
       const indices = payload.diceIndices.sort((a,b)=>b-a); indices.forEach(idx => myPrivate.dice_points.splice(idx, 1)); me.dice_count -= sk.diceCount;
       if (sk.effect.dmg) {
         const targetChar = opp.chars.find(tc => tc.pos === payload.target && tc.hp > 0);
@@ -464,26 +522,41 @@ async function submitAction(payload) {
             const dmgResult = calculateFinalDamage(c, targetChar, sk.effect.dmg, true);
             targetChar.hp = Math.max(0, targetChar.hp - dmgResult.dmg); 
             logMsg = `【${c.name}】对【${targetChar.name}】造成 ${dmgResult.dmg} 伤害。${dmgResult.logs.join('，')}`; 
-        }
+        } else { logMsg = `【${c.name}】释放技能，但没有命中目标`; }
       }
-      if (sk.type === 'attack') { pub.active_player = oppRole; pub.first_player = oppRole; }
+      // 修复 5：技能不再切换回合，继续由当前玩家消耗骰子操作
     } else if (payload.action === 'end') { 
-        pub.active_player = oppRole; pub.first_player = oppRole; pub.turn += 1; logMsg = `结束回合`; 
-        const p1Buffs = processEndOfTurn(pub.p1.chars);
-        const p2Buffs = processEndOfTurn(pub.p2.chars);
-        if(p1Buffs.length) pub.logs.push({ text: p1Buffs.join('；'), type: 'sys' });
-        if(p2Buffs.length) pub.logs.push({ text: p2Buffs.join('；'), type: 'sys' });
+      logMsg = `结束回合`; ended = true;
+    } else if (payload.action === 'skip') { 
+      logMsg = `跳过`; ended = true;
     }
-    else if (payload.action === 'skip') { pub.active_player = oppRole; logMsg = `跳过`; }
     
     pub.logs.push({ text: `${me.name} ${logMsg}`, type: payload.action === 'skill' ? 'attack' : 'sys' }); 
     if (pub.logs.length > 20) pub.logs.shift();
-    if (opp.chars.every(c => c.hp <= 0)) { pub.status = 'gameover'; pub.logs.push({ text: `🏆 ${me.name} 胜利！`, type: 'win' }); }
+
+    // 修复 5 + 6：结束回合统一走 switchTurn，只结算自己
+    if (ended) switchTurn(pub, myRole);
+
+    // 修复：胜负检查覆盖双方死亡/平局（含 buff 结算后的死亡）
+    const meDead = me.chars.every(c => c.hp <= 0);
+    const oppDead = opp.chars.every(c => c.hp <= 0);
+    if (meDead || oppDead) {
+      pub.status = 'gameover';
+      if (oppDead && !meDead) pub.logs.push({ text: `🏆 ${me.name} 胜利！`, type: 'win' });
+      else if (meDead && !oppDead) pub.logs.push({ text: `💀 ${opp.name} 胜利！`, type: 'win' });
+      else pub.logs.push({ text: `平局！`, type: 'win' });
+    }
+
+    // 结束回合才清空选中；move/skill 后保留，方便连续操作
+    localUIState.phase = 'action';
+    if (ended) localUIState.pendingChar = null;
+    localUIState.pendingSkill = null; localUIState.pendingTarget = null; localUIState.selectedDice.clear();
     
-    localUIState.phase = 'action'; localUIState.pendingChar = null; localUIState.pendingSkill = null; localUIState.pendingTarget = null; localUIState.selectedDice.clear();
-    
-    const updateData = { public_state: pub }; if (myRole === 'p1') updateData.private_p1 = myPrivate; else updateData.private_p2 = myPrivate;
-    await client.from('rooms').update(updateData).eq('room_id', myRoomId);
+    const updateData = { public_state: pub }; 
+    if (myRole === 'p1') updateData.private_p1 = myPrivate; else updateData.private_p2 = myPrivate;
+    // 修复 8：检查 error
+    const { error } = await client.from('rooms').update(updateData).eq('room_id', myRoomId);
+    if (error) throw new Error('同步失败: ' + error.message);
   } catch (err) {
     alert("操作失败: " + err.message);
   }
