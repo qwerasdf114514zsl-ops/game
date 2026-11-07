@@ -8,8 +8,9 @@
 <style>
   :root{ --bg:#070a12; --panel:rgba(20,28,48,.85); --border:rgba(90,130,220,.22); --accent:#4d7cfe; --text:#e8eeff; --muted:#8a97b8; }
   *{box-sizing:border-box;} [hidden]{display:none !important;}
-  body{ margin:0; min-height:100vh; font-family:-apple-system,sans-serif; background:#070a12; color:var(--text); display:flex; justify-content:center; padding:10px; overflow:hidden; }
-  .game{ width:100%; max-width:1400px; display:flex; flex-direction:column; gap:10px;}
+  /* 修复了这里：去掉了 overflow:hidden 和 flex 居中，允许页面上下滑动 */
+  body{ margin:0; min-height:100vh; font-family:-apple-system,sans-serif; background:#070a12; color:var(--text); padding:10px; }
+  .game{ width:100%; max-width:1400px; margin:0 auto; display:flex; flex-direction:column; gap:10px;}
   .game-header{ display:flex; align-items:center; gap:14px; padding:10px 18px; background:var(--panel); border:1px solid var(--border); border-radius:16px;}
   .game-header h1{font-size:18px; margin:0; color:#9fc4ff;}
   .round-badge{font-size:13px; color:var(--muted); padding:5px 12px; border-radius:999px; border:1px solid var(--border);}
@@ -40,7 +41,8 @@
   .buff-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
   .buff-item { font-size: 10px; background: rgba(255,255,255,.1); padding: 1px 4px; border-radius: 4px; border: 1px solid rgba(255,255,255,.2); }
   .center-panel{ grid-column: 2 / 3; display:flex; flex-direction:column; gap:10px; background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:12px;}
-  .map-container{ position:relative; width:100%; aspect-ratio: 4/5; max-height:60vh; background:var(--panel); border:1px solid var(--border); border-radius:16px; overflow:hidden; touch-action: none; margin:0 auto;}
+  /* 修复了这里：去掉了 touch-action: none */
+  .map-container{ position:relative; width:100%; aspect-ratio: 4/5; max-height:60vh; background:var(--panel); border:1px solid var(--border); border-radius:16px; overflow:hidden; margin:0 auto;}
   svg.map-lines{position:absolute; inset:0; width:100%; height:100%; pointer-events:none;}
   .map-node{ position:absolute; width:32px; height:32px; transform:translate(-50%,-50%); border-radius:50%; background:rgba(255,255,255,.05); border:2px solid rgba(255,255,255,.3); z-index:5; display:flex; justify-content:center; align-items:center; font-size:11px; font-weight:bold;}
   .map-node.highlight{ background:rgba(77,124,254,.4); border-color:#4d7cfe; cursor:pointer;}
@@ -70,11 +72,11 @@
   .modal-card input{ font-size:16px; text-align:center; padding:12px; border-radius:10px; border:none; background:rgba(0,0,0,.3); color:#fff;}
   .modal-btn{ font-size:15px; font-weight:bold; padding:12px; border-radius:10px; border:none; cursor:pointer; background:#4d7cfe; color:#fff;}
   
-  /* 手机端专属排版：让地图在上方，卡片在下方 */
+  /* 手机端排版：允许自然上下滑动 */
   @media (max-width: 1024px){ 
     .main-layout{ display: flex; flex-direction: column; } 
-    .center-panel{ order: -1; width: 100%; box-sizing: border-box; } 
-    .player-panel { width: 100%; box-sizing: border-box; }
+    .center-panel{ order: -1; width: 100%; } 
+    .player-panel { width: 100%; }
     .map-container{ max-height: 45vh; } 
   }
 </style>
@@ -106,7 +108,6 @@
     <div class="hdr-spacer"></div><button class="hdr-btn" onclick="location.reload()">退出</button>
   </header>
   <main class="main-layout">
-    <!-- 手机端会先显示 center-panel，再显示 player-panel -->
     <section class="center-panel">
       <div class="map-container" id="mapContainer"><svg class="map-lines" id="mapSvg"></svg></div>
       <div class="turn-banner" id="turnBanner">准备开始</div>
@@ -176,16 +177,15 @@ async function joinRoom() {
     const newPublic = data.public_state; newPublic.status = 'playing'; newPublic.p2.name = myLocalName; newPublic.p2.chars = initChars('p2');
     newPublic.logs.push({ text: `${myLocalName} 加入了！`, type: 'sys' });
     
-    // 强制拉取一次最新数据，防止赋值丢失
     const { data: updatedData, error: upErr } = await client.from('rooms').update({ public_state: newPublic, private_p2: { dice_points: Array.from({length:8},()=>Math.floor(Math.random()*6)+1) } }).eq('room_id', myRoomId).select().single();
     if (upErr) throw new Error('加入失败');
     
-    currentGameState = updatedData; // 立刻赋值给状态
+    currentGameState = updatedData; 
     document.getElementById('lobbyScreen').hidden = true; 
     document.getElementById('gameScreen').hidden = false;
     document.getElementById('myRoomCode').textContent = myRoomId;
     
-    renderFromCloud(); // 强制渲染一次，不等广播
+    renderFromCloud(); 
     listenToRoom();
   } catch (err) { alert('失败: ' + err.message); btn.textContent = '加入房间'; }
 }
@@ -198,7 +198,7 @@ function initChars(role) {
 }
 
 function listenToRoom() {
-  if (roomChannel) client.removeChannel(roomChannel); // 防止重复订阅
+  if (roomChannel) client.removeChannel(roomChannel);
   roomChannel = client.channel('room_' + myRoomId).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `room_id=eq.${myRoomId}` }, payload => {
     const dbData = payload.new; 
     if (dbData.public_state.status === 'waiting' && myRole === 'p1') return;
@@ -206,7 +206,6 @@ function listenToRoom() {
     currentGameState = dbData;
     const pub = dbData.public_state; const myPrivate = dbData[myRole === 'p1' ? 'private_p1' : 'private_p2'];
     
-    // 自动重摇兜底
     if (pub.status === 'playing' && pub.active_player === myRole && (!myPrivate || !myPrivate.dice_points || myPrivate.dice_points.length !== 8)) {
       const updateData = {}; updateData[myRole === 'p1' ? 'private_p1' : 'private_p2'] = { dice_points: Array.from({length:8},()=>Math.floor(Math.random()*6)+1) };
       updateData.public_state = JSON.parse(JSON.stringify(pub)); updateData.public_state[myRole].dice_count = 8;
@@ -218,12 +217,11 @@ function listenToRoom() {
   }).subscribe();
 }
 
-// 防崩渲染框架
 function renderFromCloud() {
   try {
     if (!currentGameState || !currentGameState.public_state) return; 
     const pub = currentGameState.public_state;
-    if (!pub.p1 || !pub.p2) return; // 数据没传全
+    if (!pub.p1 || !pub.p2) return; 
 
     document.getElementById('lobbyScreen').hidden = true;
     document.getElementById('gameScreen').hidden = false;
@@ -351,7 +349,6 @@ function renderControlsUI(pub) {
     const cancelBtn = document.createElement('button'); cancelBtn.className = 'act-btn cancel'; cancelBtn.textContent = '取消'; cancelBtn.onclick = () => { localUIState.phase = 'action'; localUIState.pendingSkill = null; renderFromCloud(); }; btns.appendChild(cancelBtn);
     const myChar = me.chars[localUIState.pendingChar.cIdx];
     
-    // 安全判断高亮
     document.querySelectorAll('.map-node').forEach(el => {
       if (!el.dataset.id) return; 
       const dist = calculateDistance(myChar.pos, el.dataset.id);
@@ -402,7 +399,6 @@ function handleDieClickUI(pIdx, idx, val) {
   renderFromCloud();
 }
 
-// --- 核心 Buff 结算引擎 ---
 function calculateFinalDamage(source, target, baseDmg, isSkill) {
     let logs = [];
     let atkMod = (source.buffs.strength || 0) - (source.buffs.weak || 0);
@@ -480,7 +476,6 @@ async function submitAction(payload) {
     }
     else if (payload.action === 'skip') { pub.active_player = oppRole; logMsg = `跳过`; }
     
-    // 修复了这里 type 赋值为函数的问题
     pub.logs.push({ text: `${me.name} ${logMsg}`, type: payload.action === 'skill' ? 'attack' : 'sys' }); 
     if (pub.logs.length > 20) pub.logs.shift();
     if (opp.chars.every(c => c.hp <= 0)) { pub.status = 'gameover'; pub.logs.push({ text: `🏆 ${me.name} 胜利！`, type: 'win' }); }
